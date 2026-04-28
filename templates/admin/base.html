@@ -3,102 +3,156 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Admin Panel{% endblock %}</title>
+    <title>{% block title %}Admin Arsip Rasa{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        /* Gaya minimal untuk admin, aman dari XSS karena inline style statis */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg: #0b0b0b; --surface: #141414; --surface2: #1e1e1e;
+            --text: #e0d7c6; --text-muted: #9a8c7a;
+            --gold: #d4af37; --gold-hover: #e0c35e;
+            --danger: #c0392b; --success: #2ecc71; --info: #3498db;
+            --radius: 12px; --transition: 0.2s ease;
+        }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #121212;
-            color: #e0e0e0;
-            padding: 20px;
-            max-width: 1000px;
-            margin: auto;
+            font-family: 'Inter', sans-serif;
+            background: var(--bg); color: var(--text);
+            min-height: 100vh; display: flex;
         }
-        nav {
-            background: #1e1e1e;
-            padding: 10px;
-            margin-bottom: 20px;
-            border-radius: 6px;
+        /* Sidebar */
+        .sidebar {
+            width: 260px; background: var(--surface);
+            border-right: 1px solid #222; padding: 1.5rem 1rem;
+            display: flex; flex-direction: column; gap: 2rem;
+            position: sticky; top: 0; height: 100vh;
         }
-        nav a {
-            color: #d4af37;
-            margin-right: 15px;
-            text-decoration: none;
+        .sidebar .brand {
+            font-size: 1.4rem; color: var(--gold); font-weight: 600;
+            letter-spacing: 0.5px; text-align: center;
         }
-        nav a:hover { text-decoration: underline; }
-        .flash-message {
-            padding: 10px;
-            margin-bottom: 15px;
-            border-radius: 4px;
+        .sidebar nav { display: flex; flex-direction: column; gap: 0.5rem; }
+        .sidebar nav a {
+            color: var(--text-muted); text-decoration: none;
+            padding: 0.7rem 1rem; border-radius: 8px; display: flex;
+            align-items: center; gap: 0.6rem; transition: var(--transition);
         }
-        .error { background: #5c1a1a; border-left: 4px solid #e74c3c; }
-        .success { background: #1a5c1a; border-left: 4px solid #2ecc71; }
-        .info { background: #1a1a5c; border-left: 4px solid #3498db; }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: #1e1e1e;
+        .sidebar nav a:hover, .sidebar nav a.active {
+            background: var(--surface2); color: var(--gold);
         }
-        th, td {
-            padding: 10px;
-            border-bottom: 1px solid #333;
-            text-align: left;
+        .sidebar .user-info {
+            margin-top: auto; border-top: 1px solid #222; padding-top: 1rem;
+            color: var(--text-muted); font-size: 0.9rem;
         }
-        th { background: #2c2c2c; }
+        .sidebar .user-info a { color: var(--danger); text-decoration: none; }
+        /* Main Content */
+        .main {
+            flex: 1; padding: 1.5rem 2rem; overflow-y: auto;
+            max-width: 1200px; margin: 0 auto; width: 100%;
+        }
+        .page-title { font-size: 1.8rem; margin-bottom: 1.5rem; color: var(--gold); }
+        /* Cards */
+        .card {
+            background: var(--surface); border: 1px solid #222;
+            border-radius: var(--radius); padding: 1.5rem; margin-bottom: 2rem;
+        }
+        .card-header { font-size: 1.2rem; margin-bottom: 1rem; color: var(--gold); }
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #222; }
+        th { background: var(--surface2); color: var(--gold); font-weight: 500; }
+        tr:hover td { background: #1a1a1a; }
+        /* Forms */
+        .form-group { margin-bottom: 1.2rem; }
+        .form-group label { display: block; margin-bottom: 0.3rem; color: var(--text-muted); font-size: 0.9rem; }
+        .form-control {
+            width: 100%; padding: 0.7rem 1rem; background: var(--surface2);
+            border: 1px solid #333; border-radius: 6px; color: var(--text);
+            font-family: inherit; outline: none; transition: var(--transition);
+        }
+        .form-control:focus { border-color: var(--gold); }
+        textarea.form-control { min-height: 150px; }
+        /* Buttons */
         .btn {
-            display: inline-block;
-            padding: 6px 12px;
-            margin: 2px;
-            background: #d4af37;
-            color: #121212;
-            text-decoration: none;
-            border-radius: 4px;
-            font-weight: bold;
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            padding: 0.6rem 1.4rem; border-radius: 8px;
+            font-weight: 500; text-decoration: none; cursor: pointer;
+            border: none; color: #121212; background: var(--gold);
+            transition: var(--transition); font-family: inherit;
         }
-        .btn-danger {
-            background: #c0392b;
-            color: white;
+        .btn:hover { background: var(--gold-hover); transform: translateY(-1px); }
+        .btn-outline { background: transparent; border: 1px solid var(--gold); color: var(--gold); }
+        .btn-outline:hover { background: var(--gold); color: #121212; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-danger:hover { background: #e74c3c; }
+        .btn-sm { padding: 0.4rem 1rem; font-size: 0.85rem; }
+        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        /* Flash messages */
+        .flash-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+        .flash-msg { padding: 12px 20px; border-radius: 8px; background: var(--surface2); border-left: 4px solid; color: var(--text); box-shadow: 0 5px 15px rgba(0,0,0,0.4); animation: slideIn 0.3s ease; }
+        .flash-msg.error { border-color: var(--danger); }
+        .flash-msg.success { border-color: var(--success); }
+        .flash-msg.info { border-color: var(--info); }
+        /* Pagination */
+        .pagination { display: flex; gap: 0.5rem; justify-content: center; align-items: center; }
+        .pagination a, .pagination span { padding: 0.4rem 1rem; background: var(--surface2); border-radius: 6px; color: var(--text-muted); text-decoration: none; }
+        .pagination a:hover { background: var(--gold); color: #121212; }
+        /* Stats mini grid */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .stat-card { background: var(--surface); border: 1px solid #222; border-radius: var(--radius); padding: 1rem; text-align: center; }
+        .stat-card .number { font-size: 2rem; font-weight: 600; color: var(--gold); }
+        .stat-card .label { color: var(--text-muted); font-size: 0.9rem; }
+        /* Mobile toggle */
+        .menu-toggle { display: none; background: var(--surface); border: 1px solid #333; color: var(--text); padding: 0.5rem; border-radius: 6px; cursor: pointer; }
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            .sidebar { position: fixed; z-index: 200; width: 80%; height: 100%; left: -100%; transition: left 0.3s; }
+            .sidebar.open { left: 0; box-shadow: 0 0 30px rgba(0,0,0,0.8); }
+            .menu-toggle { display: block; position: sticky; top: 10px; z-index: 201; margin: 10px; }
+            .main { padding: 1rem; }
         }
-        form input, form select, form textarea {
-            width: 100%;
-            padding: 8px;
-            margin: 6px 0 15px;
-            background: #2c2c2c;
-            border: 1px solid #444;
-            color: #e0e0e0;
-            border-radius: 4px;
-        }
-        form textarea { min-height: 150px; }
-        button[type="submit"] {
-            background: #d4af37;
-            color: #121212;
-            border: none;
-            padding: 10px 20px;
-            cursor: pointer;
-            font-weight: bold;
-            border-radius: 4px;
-        }
-        button[type="submit"]:hover { opacity: 0.9; }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
     </style>
 </head>
 <body>
-    <nav>
-        <a href="{{ url_for('admin.dashboard') }}">Dashboard</a>
+    <button class="menu-toggle" id="menuToggle">☰ Menu</button>
+    <aside class="sidebar" id="sidebar">
+        <div class="brand">🕯️ Arsip Rasa</div>
+        <nav>
+            <a href="{{ url_for('admin.dashboard') }}">📋 Dashboard</a>
+            <a href="{{ url_for('admin.list_types') }}">🏷️ Tipe</a>
+            <a href="{{ url_for('admin.list_sources') }}">📚 Sumber</a>
+            <a href="{{ url_for('admin.list_tags') }}">🔖 Tag</a>
+        </nav>
         {% if current_user.is_authenticated %}
-            <span style="float:right;">
-                {{ current_user.username }} |
-                <a href="{{ url_for('admin.logout') }}">Logout</a>
-            </span>
+        <div class="user-info">
+            👤 {{ current_user.username }}<br>
+            <a href="{{ url_for('admin.logout') }}">Logout</a>
+        </div>
         {% endif %}
-    </nav>
-    <!-- Tampilkan pesan flash -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="flash-message {{ category }}">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-    {% block content %}{% endblock %}
+    </aside>
+
+    <div class="main">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="flash-container">
+                {% for category, message in messages %}
+                <div class="flash-msg {{ category }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </div>
+
+    <script>
+        const toggle = document.getElementById('menuToggle');
+        const sidebar = document.getElementById('sidebar');
+        toggle.addEventListener('click', () => sidebar.classList.toggle('open'));
+        // Hilangkan flash setelah 4 detik
+        document.querySelectorAll('.flash-msg').forEach(el => {
+            setTimeout(() => el.style.display = 'none', 4000);
+        });
+    </script>
 </body>
 </html>
