@@ -1,4 +1,4 @@
-import os, time, sqlite3, logging, uuid
+import os, time, sqlite3, logging
 from datetime import datetime
 from functools import wraps
 
@@ -30,6 +30,9 @@ login_manager.init_app(app)
 
 DATABASE = 'library.db'
 
+# --------------------------------------------------------------------
+# Database
+# --------------------------------------------------------------------
 def get_db():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
@@ -68,7 +71,7 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     ''')
-    # Migrasi jika tabel entries sudah ada tapi belum punya like_count
+    # Pastikan kolom like_count ada (untuk upgrade dari versi lama)
     cols = [col[1] for col in conn.execute("PRAGMA table_info(entries)").fetchall()]
     if 'like_count' not in cols:
         conn.execute("ALTER TABLE entries ADD COLUMN like_count INTEGER DEFAULT 0")
@@ -88,14 +91,15 @@ def init_db():
 with app.app_context():
     init_db()
 
-# Logging 403
+# --------------------------------------------------------------------
+# Logging & IP Blocker
+# --------------------------------------------------------------------
 forbidden_logger = logging.getLogger('forbidden')
 forbidden_logger.setLevel(logging.INFO)
 fh = logging.FileHandler('access_denied.log')
 fh.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
 forbidden_logger.addHandler(fh)
 
-# IP blocking sementara
 blocked_ips = {}
 def is_ip_blocked(ip):
     if ip in blocked_ips:
@@ -113,6 +117,9 @@ def check_block():
     if is_ip_blocked(ip):
         return render_template('403.html'), 403
 
+# --------------------------------------------------------------------
+# User & Login
+# --------------------------------------------------------------------
 class User(UserMixin):
     def __init__(self, id, username):
         self.id = id
@@ -127,6 +134,9 @@ def load_user(user_id):
         return User(row['id'], row['username'])
     return None
 
+# --------------------------------------------------------------------
+# Error Handlers
+# --------------------------------------------------------------------
 @app.errorhandler(404)
 def not_found(e):
     return render_template('404.html'), 404
@@ -146,6 +156,9 @@ def forbidden(error):
         block_ip(ip, 10)
     return render_template('403.html'), 403
 
+# --------------------------------------------------------------------
+# Helpers
+# --------------------------------------------------------------------
 def get_types():
     conn = get_db()
     types = conn.execute("SELECT * FROM types ORDER BY name").fetchall()
@@ -157,11 +170,14 @@ def parse_tags(tags_str):
         return []
     return sorted(list(set(t.strip().lower() for t in tags_str.split(',') if t.strip())))
 
-# ---------- PUBLIC ROUTES ----------
+# ====================================================================
+# PUBLIC ROUTES
+# ====================================================================
 @app.route('/')
 def index():
     return render_template('index.html')
 
+# API: Daftar Entri (dengan info like untuk visitor)
 @app.route('/api/entries')
 def api_entries():
     search = request.args.get('search', '').strip()
@@ -234,33 +250,54 @@ def api_entries():
         })
     return jsonify({'entries': result, 'page': page, 'per_page': per_page, 'total': total})
 
+# API: Like (dengan validasi & logging kuat)
 @app.route('/api/entries/<int:entry_id>/like', methods=['POST'])
-@limiter.limit("10 per minute;30 per hour")
+@limiter.limit("30 per minute;100 per hour")
 def like_entry(entry_id):
     data = request.get_json(silent=True) or {}
     visitor_id = data.get('visitor_id', '').strip()
-    if not visitor_id or len(visitor_id) < 8:
-        return jsonify({'error': 'visitor_id tidak valid'}), 400
+
+    # Validasi visitor_id
+    if not visitor_id:
+        app.logger.warning(f"Like ditolak: visitor_id kosong untuk entry {entry_id}")
+        return jsonify({'error': 'visitor_id diperlukan'}), 400
+    if len(visitor_id) < 8:
+        app.logger.warning(f"Like ditolak: visitor_id terlalu pendek ({visitor_id})")
+        return jsonify({'error': 'visitor_id tidak valid (min 8 karakter)'}), 400
 
     conn = get_db()
-    entry = conn.execute("SELECT id FROM entries WHERE id = ?", (entry_id,)).fetchone()
-    if not entry:
+    try:
+        entry = conn.execute("SELECT id FROM entries WHERE id = ?", (entry_id,)).fetchone()
+        if not entry:
+            conn.close()
+            return jsonify({'error': 'Entri tidak ditemukan'}), 404
+
+        existing = conn.execute(
+            "SELECT id FROM likes WHERE entry_id = ? AND visitor_id = ?",
+            (entry_id, visitor_id)
+        ).fetchone()
+        if existing:
+            conn.close()
+            return jsonify({'error': 'Anda sudah menyukai entri ini'}), 409
+
+        conn.execute("INSERT INTO likes (entry_id, visitor_id) VALUES (?, ?)",
+                     (entry_id, visitor_id))
+        conn.execute("UPDATE entries SET like_count = like_count + 1 WHERE id = ?", (entry_id,))
+        conn.commit()
+        new_count = conn.execute("SELECT like_count FROM entries WHERE id = ?", (entry_id,)).fetchone()['like_count']
+        app.logger.info(f"Like berhasil: entry {entry_id}, visitor {visitor_id}, total {new_count}")
+        return jsonify({'success': True, 'like_count': new_count})
+
+    except sqlite3.IntegrityError as e:
+        app.logger.error(f"IntegrityError like: {e}")
+        return jsonify({'error': 'Kesalahan database (mungkin duplikat)'}), 409
+    except Exception as e:
+        app.logger.error(f"Unexpected error like: {e}")
+        return jsonify({'error': 'Kesalahan server'}), 500
+    finally:
         conn.close()
-        return jsonify({'error': 'Entri tidak ditemukan'}), 404
 
-    existing = conn.execute("SELECT id FROM likes WHERE entry_id = ? AND visitor_id = ?",
-                            (entry_id, visitor_id)).fetchone()
-    if existing:
-        conn.close()
-        return jsonify({'error': 'Anda sudah menyukai entri ini'}), 409
-
-    conn.execute("INSERT INTO likes (entry_id, visitor_id) VALUES (?, ?)", (entry_id, visitor_id))
-    conn.execute("UPDATE entries SET like_count = like_count + 1 WHERE id = ?", (entry_id,))
-    conn.commit()
-    new_count = conn.execute("SELECT like_count FROM entries WHERE id = ?", (entry_id,)).fetchone()['like_count']
-    conn.close()
-    return jsonify({'success': True, 'like_count': new_count})
-
+# API: Statistik
 @app.route('/api/stats')
 def api_stats():
     conn = get_db()
@@ -283,7 +320,9 @@ def api_stats():
         'top_liked': [{'id': e['id'], 'content': e['content'][:80], 'likes': e['like_count']} for e in top_liked]
     })
 
-# ---------- ADMIN BLUEPRINT ----------
+# ====================================================================
+# ADMIN BLUEPRINT (lengkap)
+# ====================================================================
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin', template_folder='templates/admin')
 
 def admin_required(f):
