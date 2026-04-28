@@ -252,6 +252,7 @@ def api_entries():
 
 # API: Like (dengan validasi & logging kuat)
 @app.route('/api/entries/<int:entry_id>/like', methods=['POST'])
+@csrf.exempt
 @limiter.limit("30 per minute;100 per hour")
 def like_entry(entry_id):
     data = request.get_json(silent=True) or {}
