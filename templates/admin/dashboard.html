@@ -1,0 +1,54 @@
+{% extends "admin/base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1>Daftar Entri (Total: {{ total }})</h1>
+<a href="{{ url_for('admin.add_entry') }}" class="btn">Tambah Baru</a>
+
+{% if entries %}
+<table>
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Tipe</th>
+            <th>Konten (cuplikan)</th>
+            <th>Sumber</th>
+            <th>Tag</th>
+            <th>Aksi</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for entry in entries %}
+        <tr>
+            <td>{{ entry.id }}</td>
+            <td>{{ entry.type }}</td>
+            <td>{{ entry.content[:80] }}{% if entry.content|length > 80 %}...{% endif %}</td>
+            <td>{{ entry.source }}</td>
+            <td>{{ entry.tags }}</td>
+            <td>
+                <a href="{{ url_for('admin.edit_entry', id=entry.id) }}" class="btn">Edit</a>
+                <form method="POST" action="{{ url_for('admin.delete_entry', id=entry.id) }}" style="display:inline;" onsubmit="return confirm('Hapus entri ini?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">Hapus</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- Navigasi halaman -->
+{% if total > per_page %}
+<div style="margin-top:15px; text-align:center;">
+    {% if page > 1 %}
+        <a href="{{ url_for('admin.dashboard', page=page-1) }}" class="btn">← Sebelumnya</a>
+    {% endif %}
+    Halaman {{ page }} dari {{ ((total / per_page)|round(0, 'ceil'))|int }}
+    {% if page * per_page < total %}
+        <a href="{{ url_for('admin.dashboard', page=page+1) }}" class="btn">Berikutnya →</a>
+    {% endif %}
+</div>
+{% endif %}
+{% else %}
+<p>Belum ada entri.</p>
+{% endif %}
+{% endblock %}

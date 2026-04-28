@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Admin Panel{% endblock %}</title>
+    <style>
+        /* Gaya minimal untuk admin, aman dari XSS karena inline style statis */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #121212;
+            color: #e0e0e0;
+            padding: 20px;
+            max-width: 1000px;
+            margin: auto;
+        }
+        nav {
+            background: #1e1e1e;
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+        }
+        nav a {
+            color: #d4af37;
+            margin-right: 15px;
+            text-decoration: none;
+        }
+        nav a:hover { text-decoration: underline; }
+        .flash-message {
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+        }
+        .error { background: #5c1a1a; border-left: 4px solid #e74c3c; }
+        .success { background: #1a5c1a; border-left: 4px solid #2ecc71; }
+        .info { background: #1a1a5c; border-left: 4px solid #3498db; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #1e1e1e;
+        }
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid #333;
+            text-align: left;
+        }
+        th { background: #2c2c2c; }
+        .btn {
+            display: inline-block;
+            padding: 6px 12px;
+            margin: 2px;
+            background: #d4af37;
+            color: #121212;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .btn-danger {
+            background: #c0392b;
+            color: white;
+        }
+        form input, form select, form textarea {
+            width: 100%;
+            padding: 8px;
+            margin: 6px 0 15px;
+            background: #2c2c2c;
+            border: 1px solid #444;
+            color: #e0e0e0;
+            border-radius: 4px;
+        }
+        form textarea { min-height: 150px; }
+        button[type="submit"] {
+            background: #d4af37;
+            color: #121212;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 4px;
+        }
+        button[type="submit"]:hover { opacity: 0.9; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="{{ url_for('admin.dashboard') }}">Dashboard</a>
+        {% if current_user.is_authenticated %}
+            <span style="float:right;">
+                {{ current_user.username }} |
+                <a href="{{ url_for('admin.logout') }}">Logout</a>
+            </span>
+        {% endif %}
+    </nav>
+    <!-- Tampilkan pesan flash -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash-message {{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+</body>
+</html>

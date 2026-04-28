@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🕯️ Arsip Rasa – Puisi, Quote & Psikologi</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🕯️ Arsip Rasa</h1>
+            <p class="subtitle">Koleksi puisi, petikan, dan renungan psikologi</p>
+        </header>
+
+        <div class="controls">
+            <input type="text" id="searchInput" placeholder="Cari kata... (contoh: rindu, trauma, senja)" autocomplete="off">
+            <div class="filters">
+                <button class="filter-btn active" data-type="all">Semua</button>
+                <button class="filter-btn" data-type="puisi">Puisi</button>
+                <button class="filter-btn" data-type="quote">Quote</button>
+                <button class="filter-btn" data-type="psikologi">Psikologi</button>
+                <!-- Filter tag contoh, bisa dikembangkan -->
+                <button class="filter-btn tag-btn" data-tag="sendu">Sendu</button>
+                <button class="filter-btn tag-btn" data-tag="rindu">Rindu</button>
+                <button class="filter-btn tag-btn" data-tag="trauma">Trauma</button>
+                <button class="filter-btn tag-btn" data-tag="motivasi">Motivasi</button>
+            </div>
+        </div>
+
+        <div id="cardGrid" class="grid"></div>
+        <div id="loader" class="loader">Memuat...</div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
