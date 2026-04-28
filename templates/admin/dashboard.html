@@ -3,7 +3,6 @@
 {% block content %}
 <h1 class="page-title">📋 Dashboard</h1>
 
-<!-- Statistik ringkas -->
 <div class="stats-grid">
     <div class="stat-card">
         <div class="number">{{ total }}</div>
@@ -11,14 +10,13 @@
     </div>
 </div>
 
-<!-- Filter & Search -->
 <div class="card">
     <form method="GET" action="{{ url_for('admin.dashboard') }}" class="btn-group" style="flex-wrap:wrap;">
         <input type="text" name="search" placeholder="Cari..." value="{{ current_search }}" class="form-control" style="flex:2; min-width:200px;">
         <select name="type" class="form-control" style="flex:1; min-width:150px;">
             <option value="">Semua Tipe</option>
             {% for t in types %}
-            <option value="{{ t.id }}" {% if current_type == t.id|string %}selected{% endif %}>{{ t.name }} ({{ t.cnt }})</option>
+            <option value="{{ t.id }}" {% if current_type == t.id|string %}selected{% endif %}>{{ t.name }}</option>
             {% endfor %}
         </select>
         <select name="sort" class="form-control" style="flex:1; min-width:130px;">
@@ -26,16 +24,27 @@
             <option value="oldest" {% if current_sort == 'oldest' %}selected{% endif %}>Terlama</option>
             <option value="a-z" {% if current_sort == 'a-z' %}selected{% endif %}>A–Z</option>
             <option value="z-a" {% if current_sort == 'z-a' %}selected{% endif %}>Z–A</option>
+            <option value="most_likes" {% if current_sort == 'most_likes' %}selected{% endif %}>❤️ Terbanyak Like</option>
+            <option value="least_likes" {% if current_sort == 'least_likes' %}selected{% endif %}>🤍 Tersedikit Like</option>
         </select>
         <button type="submit" class="btn btn-sm">Filter</button>
         <a href="{{ url_for('admin.add_entry') }}" class="btn btn-sm btn-outline">+ Tambah Baru</a>
     </form>
 </div>
 
-<!-- Tabel Entries -->
 <div class="card">
     <table>
-        <thead><tr><th>ID</th><th>Tipe</th><th>Konten</th><th>Sumber</th><th>Tag</th><th>Aksi</th></tr></thead>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Tipe</th>
+                <th>Konten</th>
+                <th>Sumber</th>
+                <th>Tag</th>
+                <th>❤️ Like</th>
+                <th>Aksi</th>
+            </tr>
+        </thead>
         <tbody>
             {% for e in entries %}
             <tr>
@@ -44,6 +53,7 @@
                 <td>{{ e.content[:60] }}{% if e.content|length > 60 %}…{% endif %}</td>
                 <td>{{ e.source }}</td>
                 <td>{{ e.tags }}</td>
+                <td>{{ e.like_count }}</td>
                 <td>
                     <div class="btn-group">
                         <a href="{{ url_for('admin.edit_entry', id=e.id) }}" class="btn btn-sm btn-outline">Edit</a>

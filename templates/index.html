@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <!-- Sticky Header -->
     <header class="sticky-header">
         <div class="header-inner">
             <div class="logo-area">
@@ -20,10 +19,7 @@
                     <input type="text" id="searchInput" placeholder="Cari kata, sumber, tag..." autocomplete="off" aria-label="Cari konten">
                 </div>
                 <select id="sortSelect" class="sort-select" aria-label="Urutkan">
-                    <option value="newest">Terbaru</option>
-                    <option value="oldest">Terlama</option>
-                    <option value="a-z">A-Z</option>
-                    <option value="z-a">Z-A</option>
+                    <!-- akan diisi oleh JS -->
                 </select>
                 <button id="filterToggle" class="btn-filter" aria-expanded="false" aria-label="Buka filter lanjutan">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
@@ -31,7 +27,6 @@
                 </button>
             </div>
         </div>
-        <!-- Filter Panel (collapsible) -->
         <div id="filterPanel" class="filter-panel" aria-hidden="true">
             <div class="filter-row">
                 <div class="filter-group">
@@ -40,37 +35,26 @@
                 </div>
                 <div class="filter-group">
                     <label for="sourceInput">Sumber</label>
-                    <input type="text" id="sourceInput" placeholder="Nama penulis/sumber..." aria-label="Filter sumber">
+                    <input type="text" id="sourceInput" placeholder="Nama penulis/sumber...">
                 </div>
                 <div class="filter-group">
                     <label for="tagInput">Tag</label>
-                    <input type="text" id="tagInput" placeholder="Misal: rindu, trauma..." aria-label="Filter tag">
+                    <input type="text" id="tagInput" placeholder="Misal: rindu, trauma...">
                 </div>
             </div>
         </div>
-        <!-- Chip filter aktif -->
         <div id="activeFilters" class="active-filters"></div>
     </header>
 
-    <!-- Main Content -->
     <main class="container">
-        <!-- Statistik Ringkas -->
         <div id="statsContainer" class="stats-bar"></div>
-
-        <!-- Grid Kartu -->
-        <div id="cardGrid" class="grid">
-            <!-- Skeleton loader akan diisi dinamis -->
-        </div>
-
-        <!-- Empty State (hidden default) -->
+        <div id="cardGrid" class="grid"></div>
         <div id="emptyState" class="empty-state" style="display:none;">
             <div class="empty-icon">📭</div>
             <h3>Tidak ada hasil</h3>
             <p>Coba kata kunci lain atau hapus filter.</p>
             <button id="clearFiltersBtn" class="btn btn-secondary">Hapus Semua Filter</button>
         </div>
-
-        <!-- Loader -->
         <div id="loader" class="loader" style="display:none;">
             <div class="loader-spinner"></div>
             <span>Memuat...</span>

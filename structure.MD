@@ -1,10 +1,7 @@
 arsip-rasa/
-├── .env
-├── .gitignore
-├── requirements.txt
 ├── app.py
-├── library.db
-├── access_denied.log
+├── requirements.txt
+├── .env.example
 ├── static/
 │   ├── css/
 │   │   └── style.css
