@@ -3,95 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Admin Panel{% endblock %}</title>
+    <title>{% block title %}Admin Arsip Rasa{% endblock %}</title>
     <style>
-        /* Gaya minimal untuk admin, aman dari XSS karena inline style statis */
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #121212;
-            color: #e0e0e0;
-            padding: 20px;
-            max-width: 1000px;
-            margin: auto;
-        }
-        nav {
-            background: #1e1e1e;
-            padding: 10px;
-            margin-bottom: 20px;
-            border-radius: 6px;
-        }
-        nav a {
-            color: #d4af37;
-            margin-right: 15px;
-            text-decoration: none;
-        }
+        body { font-family: sans-serif; background: #121212; color: #e0e0e0; margin: 0; padding: 20px; max-width: 1200px; margin: auto; }
+        nav { background: #1e1e1e; padding: 10px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 20px; align-items: center; }
+        nav a { color: #d4af37; text-decoration: none; font-weight: bold; }
         nav a:hover { text-decoration: underline; }
-        .flash-message {
-            padding: 10px;
-            margin-bottom: 15px;
-            border-radius: 4px;
-        }
+        .flash-message { padding: 10px; margin: 10px 0; border-radius: 6px; }
         .error { background: #5c1a1a; border-left: 4px solid #e74c3c; }
         .success { background: #1a5c1a; border-left: 4px solid #2ecc71; }
         .info { background: #1a1a5c; border-left: 4px solid #3498db; }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: #1e1e1e;
-        }
-        th, td {
-            padding: 10px;
-            border-bottom: 1px solid #333;
-            text-align: left;
-        }
-        th { background: #2c2c2c; }
-        .btn {
-            display: inline-block;
-            padding: 6px 12px;
-            margin: 2px;
-            background: #d4af37;
-            color: #121212;
-            text-decoration: none;
-            border-radius: 4px;
-            font-weight: bold;
-        }
-        .btn-danger {
-            background: #c0392b;
-            color: white;
-        }
-        form input, form select, form textarea {
-            width: 100%;
-            padding: 8px;
-            margin: 6px 0 15px;
-            background: #2c2c2c;
-            border: 1px solid #444;
-            color: #e0e0e0;
-            border-radius: 4px;
-        }
-        form textarea { min-height: 150px; }
-        button[type="submit"] {
-            background: #d4af37;
-            color: #121212;
-            border: none;
-            padding: 10px 20px;
-            cursor: pointer;
-            font-weight: bold;
-            border-radius: 4px;
-        }
-        button[type="submit"]:hover { opacity: 0.9; }
+        table { width: 100%; border-collapse: collapse; background: #1e1e1e; border-radius: 8px; overflow: hidden; }
+        th, td { padding: 10px 15px; border-bottom: 1px solid #333; text-align: left; }
+        th { background: #2c2c2c; color: #d4af37; }
+        .btn { padding: 6px 12px; background: #d4af37; color: #121212; border-radius: 4px; text-decoration: none; font-weight: bold; display: inline-block; margin: 2px; }
+        .btn-danger { background: #c0392b; color: white; }
+        form input, form select, form textarea { width: 100%; padding: 8px; margin: 6px 0 15px; background: #2c2c2c; border: 1px solid #444; color: #e0e0e0; border-radius: 4px; }
+        form textarea { min-height: 120px; }
+        button[type="submit"] { background: #d4af37; color: #121212; border: none; padding: 10px 20px; cursor: pointer; font-weight: bold; border-radius: 4px; }
+        .sort-links a { color: #aaa; margin: 0 8px; text-decoration: none; }
+        .sort-links a.active { color: #d4af37; font-weight: bold; }
     </style>
 </head>
 <body>
     <nav>
         <a href="{{ url_for('admin.dashboard') }}">Dashboard</a>
+        <a href="{{ url_for('admin.list_types') }}">Tipe</a>
+        <a href="{{ url_for('admin.list_sources') }}">Sumber</a>
+        <a href="{{ url_for('admin.list_tags') }}">Tag</a>
         {% if current_user.is_authenticated %}
-            <span style="float:right;">
-                {{ current_user.username }} |
-                <a href="{{ url_for('admin.logout') }}">Logout</a>
-            </span>
+            <span style="margin-left:auto;">{{ current_user.username }} | <a href="{{ url_for('admin.logout') }}">Logout</a></span>
         {% endif %}
     </nav>
-    <!-- Tampilkan pesan flash -->
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}

@@ -1,0 +1,43 @@
+{% extends "admin/base.html" %}
+{% block title %}Kelola Tipe{% endblock %}
+{% block content %}
+<h1>Daftar Tipe</h1>
+<div class="sort-links">
+    Urutkan:
+    <a href="?sort=a-z" class="{% if current_sort == 'a-z' %}active{% endif %}">A-Z</a>
+    <a href="?sort=z-a" class="{% if current_sort == 'z-a' %}active{% endif %}">Z-A</a>
+    <a href="?sort=newest" class="{% if current_sort == 'newest' %}active{% endif %}">Terbaru</a>
+    <a href="?sort=oldest" class="{% if current_sort == 'oldest' %}active{% endif %}">Terlama</a>
+    <a href="?sort=most" class="{% if current_sort == 'most' %}active{% endif %}">Terbanyak</a>
+    <a href="?sort=least" class="{% if current_sort == 'least' %}active{% endif %}">Tersedikit</a>
+</div>
+<br>
+<form method="POST" action="{{ url_for('admin.add_type') }}" style="display:flex; gap:10px; max-width:400px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="text" name="name" placeholder="Nama tipe baru" required>
+    <button type="submit">Tambah</button>
+</form>
+<table>
+    <thead><tr><th>ID</th><th>Nama</th><th>Jumlah Entri</th><th>Aksi</th></tr></thead>
+    <tbody>
+        {% for t in types %}
+        <tr>
+            <td>{{ t.id }}</td>
+            <td>{{ t.name }}</td>
+            <td>{{ t.cnt }}</td>
+            <td>
+                <form method="POST" action="{{ url_for('admin.edit_type', id=t.id) }}" style="display:inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="text" name="name" value="{{ t.name }}" style="width:auto;">
+                    <button type="submit" class="btn">Ubah</button>
+                </form>
+                <form method="POST" action="{{ url_for('admin.delete_type', id=t.id) }}" style="display:inline;" onsubmit="return confirm('Hapus tipe ini?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">Hapus</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
