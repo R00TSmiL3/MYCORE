@@ -3,7 +3,6 @@
 {% block content %}
 <h1>Login Admin</h1>
 <form method="POST">
-    <!-- Token CSRF wajib -->
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label for="username">Username</label>
     <input type="text" id="username" name="username" required autocomplete="username">

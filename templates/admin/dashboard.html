@@ -2,7 +2,8 @@
 {% block title %}Dashboard{% endblock %}
 {% block content %}
 <h1>Daftar Entri (Total: {{ total }})</h1>
-<form method="GET" action="{{ url_for('admin.dashboard') }}" style="display:flex; gap:10px; flex-wrap:wrap;">
+
+<form method="GET" action="{{ url_for('admin.dashboard') }}" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px;">
     <input type="text" name="search" placeholder="Cari..." value="{{ current_search }}">
     <select name="type">
         <option value="">Semua Tipe</option>
@@ -20,8 +21,18 @@
     <a href="{{ url_for('admin.add_entry') }}" class="btn">Tambah Baru</a>
 </form>
 
+{% if entries %}
 <table>
-    <thead><tr><th>ID</th><th>Tipe</th><th>Konten</th><th>Sumber</th><th>Tag</th><th>Aksi</th></tr></thead>
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Tipe</th>
+            <th>Konten (cuplikan)</th>
+            <th>Sumber</th>
+            <th>Tag</th>
+            <th>Aksi</th>
+        </tr>
+    </thead>
     <tbody>
         {% for e in entries %}
         <tr>
@@ -32,7 +43,7 @@
             <td>{{ e.tags }}</td>
             <td>
                 <a href="{{ url_for('admin.edit_entry', id=e.id) }}" class="btn">Edit</a>
-                <form method="POST" action="{{ url_for('admin.delete_entry', id=e.id) }}" style="display:inline;" onsubmit="return confirm('Hapus?');">
+                <form method="POST" action="{{ url_for('admin.delete_entry', id=e.id) }}" style="display:inline;" onsubmit="return confirm('Hapus entri ini?')">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-danger">Hapus</button>
                 </form>
@@ -41,11 +52,19 @@
         {% endfor %}
     </tbody>
 </table>
+
 {% if total > per_page %}
 <div style="margin-top:15px; text-align:center;">
-    {% if page > 1 %}<a href="?page={{ page-1 }}&search={{ current_search }}&type={{ current_type }}&sort={{ current_sort }}" class="btn">←</a>{% endif %}
-    Halaman {{ page }} dari {{ ((total/per_page)|round(0,'ceil'))|int }}
-    {% if page * per_page < total %}<a href="?page={{ page+1 }}&search={{ current_search }}&type={{ current_type }}&sort={{ current_sort }}" class="btn">→</a>{% endif %}
+    {% if page > 1 %}
+        <a href="{{ url_for('admin.dashboard', page=page-1, search=current_search, type=current_type, sort=current_sort) }}" class="btn">← Sebelumnya</a>
+    {% endif %}
+    Halaman {{ page }} dari {{ ((total / per_page)|round(0, 'ceil'))|int }}
+    {% if page * per_page < total %}
+        <a href="{{ url_for('admin.dashboard', page=page+1, search=current_search, type=current_type, sort=current_sort) }}" class="btn">Berikutnya →</a>
+    {% endif %}
 </div>
+{% endif %}
+{% else %}
+<p>Belum ada entri.</p>
 {% endif %}
 {% endblock %}

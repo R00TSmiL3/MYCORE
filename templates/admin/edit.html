@@ -4,22 +4,18 @@
 <h1>{% if entry %}Edit Entri #{{ entry.id }}{% else %}Tambah Entri Baru{% endif %}</h1>
 <form method="POST">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label for="type">Tipe</label>
-    <select id="type" name="type" required>
-        <option value="puisi" {% if entry and entry.type == 'puisi' %}selected{% endif %}>Puisi</option>
-        <option value="quote" {% if entry and entry.type == 'quote' %}selected{% endif %}>Quote</option>
-        <option value="psikologi" {% if entry and entry.type == 'psikologi' %}selected{% endif %}>Psikologi</option>
+    <label for="type_id">Tipe</label>
+    <select id="type_id" name="type_id" required>
+        {% for t in types %}
+        <option value="{{ t.id }}" {% if entry and entry.type_id == t.id %}selected{% endif %}>{{ t.name }}</option>
+        {% endfor %}
     </select>
-
     <label for="content">Konten</label>
     <textarea id="content" name="content" required>{{ entry.content if entry else '' }}</textarea>
-
-    <label for="source">Sumber (penulis, buku, dll.)</label>
+    <label for="source">Sumber</label>
     <input type="text" id="source" name="source" value="{{ entry.source if entry else '' }}">
-
     <label for="tags">Tag (pisahkan dengan koma)</label>
     <input type="text" id="tags" name="tags" value="{{ entry.tags if entry else '' }}">
-
     <button type="submit">Simpan</button>
 </form>
 {% endblock %}
