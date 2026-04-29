@@ -1,4 +1,5 @@
 .env
 .git
+__pycache__
 library.db
 access_denied.log

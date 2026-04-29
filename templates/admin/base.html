@@ -85,10 +85,10 @@
     <aside class="sidebar" id="sidebar">
         <div class="brand">🕯️ Arsip Rasa</div>
         <nav>
-            <a href="{{ url_for('admin.dashboard') }}">📋 Dashboard</a>
-            <a href="{{ url_for('admin.list_types') }}">🏷️ Tipe</a>
-            <a href="{{ url_for('admin.list_sources') }}">📚 Sumber</a>
-            <a href="{{ url_for('admin.list_tags') }}">🔖 Tag</a>
+            <a href="{{ url_for('admin.admin_index') }}">📋 Dashboard</a>
+            <a href="{{ url_for('admin_list_types') }}">🏷️ Tipe</a>
+            <a href="{{ url_for('admin_list_sources') }}">📚 Sumber</a>
+            <a href="{{ url_for('admin_list_tags') }}">🔖 Tag</a>
         </nav>
         {% if current_user.is_authenticated %}
         <div class="user-info">

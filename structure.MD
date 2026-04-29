@@ -1,12 +1,14 @@
 arsip-rasa/
-├── app.py
-├── requirements.txt
 ├── .env.example
+├── .gitignore
+├── requirements.txt
+├── app.py
 ├── static/
 │   ├── css/
 │   │   └── style.css
 │   └── js/
-│       └── script.js
+│       ├── script.js
+│       └── admin.js
 └── templates/
     ├── index.html
     ├── 403.html
@@ -15,8 +17,4 @@ arsip-rasa/
     └── admin/
         ├── base.html
         ├── login.html
-        ├── dashboard.html
-        ├── edit.html
-        ├── types.html
-        ├── sources.html
-        └── tags.html
+        └── admin.html
