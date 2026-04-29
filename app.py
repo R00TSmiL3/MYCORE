@@ -1,6 +1,5 @@
 import os, time, sqlite3, logging
 from functools import wraps
-from urllib.parse import urlparse
 from flask import (Flask, render_template, request, redirect, url_for,
                    flash, jsonify, Blueprint, abort)
 from flask_login import (LoginManager, UserMixin, login_user,
@@ -70,7 +69,7 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     ''')
-    # Pastikan kolom like_count ada
+    # Pastikan kolom like_count ada (upgrade dari versi lama)
     cols = [col[1] for col in conn.execute("PRAGMA table_info(entries)").fetchall()]
     if 'like_count' not in cols:
         conn.execute("ALTER TABLE entries ADD COLUMN like_count INTEGER DEFAULT 0")
@@ -117,7 +116,7 @@ def check_block():
         abort(403)
 
 def is_safe_redirect_url(target):
-    """Only allow relative URLs (no host) to prevent open redirect."""
+    """Hanya izinkan URL relatif (tanpa host) untuk mencegah open redirect."""
     if not target:
         return False
     if '://' in target:
@@ -324,6 +323,24 @@ def api_stats():
         'top_liked': [{'id': e['id'], 'content': e['content'][:80], 'likes': e['like_count']} for e in top_liked]
     })
 
+@app.route('/api/random')
+def api_random():
+    conn = get_db()
+    entry = conn.execute("SELECT e.*, t.name as type_name FROM entries e JOIN types t ON e.type_id = t.id ORDER BY RANDOM() LIMIT 1").fetchone()
+    conn.close()
+    if not entry:
+        return jsonify({'error': 'Tidak ada entri'}), 404
+    return jsonify({
+        'id': entry['id'],
+        'type': entry['type_name'],
+        'type_id': entry['type_id'],
+        'content': entry['content'],
+        'source': entry['source'] or 'Anonim',
+        'tags': parse_tags(entry['tags']),
+        'like_count': entry['like_count'],
+        'created_at': entry['created_at']
+    })
+
 # ====================================================================
 # ADMIN BLUEPRINT
 # ====================================================================
@@ -368,10 +385,9 @@ def admin_index():
     return render_template('admin/admin.html')
 
 # ====================================================================
-# ADMIN API (dengan CSRF via header X-CSRFToken)
+# ADMIN API
 # ====================================================================
 
-# --- Entries ---
 @app.route('/api/admin/entries', methods=['GET'])
 @login_required
 def api_admin_entries():
@@ -540,8 +556,7 @@ def api_admin_update_type(id):
 @login_required
 def api_admin_delete_type(id):
     conn = get_db()
-    cnt = conn.execute("SELECT COUNT(*) as cnt FROM entries WHERE type_id=?",
-                       (id,)).fetchone()['cnt']
+    cnt = conn.execute("SELECT COUNT(*) as cnt FROM entries WHERE type_id=?", (id,)).fetchone()['cnt']
     if cnt > 0:
         conn.close()
         return jsonify({'error': f'Tipe masih memiliki {cnt} entri'}), 409

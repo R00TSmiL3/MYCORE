@@ -1,6 +1,5 @@
-// admin.js – SPA Admin Panel with CSRF and HTML escaping
+// admin.js – SPA Admin Panel with CSRF, XSS prevention, confirm modal
 
-// CSRF token from meta tag
 const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 
 function apiFetch(url, options = {}) {
@@ -9,7 +8,6 @@ function apiFetch(url, options = {}) {
   return fetch(url, options);
 }
 
-// --- HTML escape function (prevents XSS) ---
 function escapeHtml(str) {
   if (!str) return '';
   return String(str)
@@ -21,10 +19,10 @@ function escapeHtml(str) {
 }
 
 const API_ENTRIES = '/api/admin/entries';
-const API_TYPES = '/api/admin/types';
+const API_TYPES   = '/api/admin/types';
 const API_SOURCES = '/api/admin/sources';
-const API_TAGS = '/api/admin/tags';
-const API_STATS = '/api/admin/stats';
+const API_TAGS    = '/api/admin/tags';
+const API_STATS   = '/api/admin/stats';
 
 let currentPage = 'dashboard';
 let entriesPage = 1, entriesTotal = 0;
@@ -51,13 +49,13 @@ function switchPage(page) {
   else if (page === 'tags') loadTags();
 }
 
-// Flash message
-function showFlash(msg, type = 'info') {
-  const flash = document.createElement('div');
-  flash.className = `flash-msg ${type}`;
-  flash.textContent = msg; // safe, no HTML
-  document.querySelector('.main-content').prepend(flash);
-  setTimeout(() => flash.remove(), 4000);
+// Flash notification
+function showFlash(msg, type='info') {
+  const div = document.createElement('div');
+  div.className = `flash-msg ${type}`;
+  div.textContent = msg;
+  document.querySelector('.main-content').prepend(div);
+  setTimeout(() => div.remove(), 4000);
 }
 
 // Modal helpers
@@ -73,7 +71,28 @@ window.addEventListener('click', e => {
   if (e.target === document.getElementById('modal')) closeModal();
 });
 
-// Dashboard
+// Confirm modal (returns Promise)
+function confirmModal(message) {
+  return new Promise(resolve => {
+    openModal(`
+      <p>${message}</p>
+      <div style="display:flex; gap:1rem; justify-content:flex-end; margin-top:1.5rem;">
+        <button class="btn btn-outline" id="modal-cancel">Batal</button>
+        <button class="btn btn-danger" id="modal-confirm">Ya, Hapus</button>
+      </div>
+    `);
+    document.getElementById('modal-cancel').addEventListener('click', () => {
+      closeModal();
+      resolve(false);
+    });
+    document.getElementById('modal-confirm').addEventListener('click', () => {
+      closeModal();
+      resolve(true);
+    });
+  });
+}
+
+// ---------------- Dashboard ----------------
 async function loadDashboard() {
   try {
     const statsRes = await apiFetch(API_STATS);
@@ -86,21 +105,17 @@ async function loadDashboard() {
     const data = await entriesRes.json();
     let html = '';
     if (data.entries.length) {
-      html = `
-        <table>
-          <thead><tr><th>ID</th><th>Tipe</th><th>Konten</th><th>Sumber</th><th>Likes</th></tr></thead>
-          <tbody>
-            ${data.entries.map(e => `
-              <tr>
-                <td>${e.id}</td>
-                <td>${escapeHtml(e.type_name)}</td>
-                <td>${escapeHtml(e.content.substring(0,60))}...</td>
-                <td>${escapeHtml(e.source)}</td>
-                <td>${e.like_count}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>`;
+      html = `<table>
+        <thead><tr><th>ID</th><th>Tipe</th><th>Konten</th><th>Sumber</th><th>Likes</th></tr></thead>
+        <tbody>${data.entries.map(e => `
+          <tr>
+            <td>${e.id}</td>
+            <td>${escapeHtml(e.type_name)}</td>
+            <td>${escapeHtml(e.content.substring(0,60))}…</td>
+            <td>${escapeHtml(e.source)}</td>
+            <td>${e.like_count}</td>
+          </tr>`).join('')}
+        </tbody></table>`;
     } else {
       html = '<p>Belum ada entri.</p>';
     }
@@ -111,7 +126,7 @@ async function loadDashboard() {
   }
 }
 
-// Entries
+// ---------------- Entries ----------------
 async function loadEntries() {
   entrySearch = document.getElementById('entry-search').value.trim();
   entryFilterType = document.getElementById('entry-type-filter').value;
@@ -123,26 +138,22 @@ async function loadEntries() {
     entriesTotal = data.total;
     let html = '';
     if (data.entries.length) {
-      html = `
-        <table>
-          <thead><tr><th>ID</th><th>Tipe</th><th>Konten</th><th>Sumber</th><th>Tag</th><th>Likes</th><th>Aksi</th></tr></thead>
-          <tbody>
-            ${data.entries.map(e => `
-              <tr>
-                <td>${e.id}</td>
-                <td>${escapeHtml(e.type_name)}</td>
-                <td>${escapeHtml(e.content.substring(0,60))}...</td>
-                <td>${escapeHtml(e.source)}</td>
-                <td>${escapeHtml(e.tags)}</td>
-                <td>${e.like_count}</td>
-                <td>
-                  <button class="btn btn-sm edit-entry" data-id="${e.id}">Edit</button>
-                  <button class="btn btn-sm btn-danger delete-entry" data-id="${e.id}">Hapus</button>
-                </td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>`;
+      html = `<table>
+        <thead><tr><th>ID</th><th>Tipe</th><th>Konten</th><th>Sumber</th><th>Tag</th><th>Likes</th><th>Aksi</th></tr></thead>
+        <tbody>${data.entries.map(e => `
+          <tr>
+            <td>${e.id}</td>
+            <td>${escapeHtml(e.type_name)}</td>
+            <td>${escapeHtml(e.content.substring(0,60))}…</td>
+            <td>${escapeHtml(e.source)}</td>
+            <td>${escapeHtml(e.tags)}</td>
+            <td>${e.like_count}</td>
+            <td>
+              <button class="btn btn-sm edit-entry" data-id="${e.id}">Edit</button>
+              <button class="btn btn-sm btn-danger delete-entry" data-id="${e.id}">Hapus</button>
+            </td>
+          </tr>`).join('')}
+        </tbody></table>`;
     } else {
       html = '<p>Tidak ada entri.</p>';
     }
@@ -172,8 +183,12 @@ function renderEntriesPagination() {
 }
 
 function attachEntryEvents() {
-  document.querySelectorAll('.edit-entry').forEach(btn => btn.addEventListener('click', () => showEntryModal(btn.dataset.id)));
-  document.querySelectorAll('.delete-entry').forEach(btn => btn.addEventListener('click', () => deleteEntry(btn.dataset.id)));
+  document.querySelectorAll('.edit-entry').forEach(btn =>
+    btn.addEventListener('click', () => showEntryModal(btn.dataset.id))
+  );
+  document.querySelectorAll('.delete-entry').forEach(btn =>
+    btn.addEventListener('click', () => deleteEntry(btn.dataset.id))
+  );
 }
 
 async function showEntryModal(id = null) {
@@ -185,8 +200,6 @@ async function showEntryModal(id = null) {
     if (res.ok) entry = await res.json();
     else return showFlash('Entri tidak ditemukan.', 'error');
   }
-  // Note: Values inserted into input/textarea are safe without escaping,
-  // but if we ever embed in HTML context we must escape.
   openModal(`
     <h3>${id ? 'Edit Entri' : 'Tambah Entri'}</h3>
     <div style="display:flex;flex-direction:column;gap:1rem;margin-top:1rem;">
@@ -223,7 +236,7 @@ async function showEntryModal(id = null) {
 }
 
 async function deleteEntry(id) {
-  if (!confirm('Hapus entri ini?')) return;
+  if (!(await confirmModal('Hapus entri ini?'))) return;
   const res = await apiFetch(`${API_ENTRIES}/${id}`, { method: 'DELETE' });
   if (res.ok) {
     loadEntries();
@@ -231,44 +244,36 @@ async function deleteEntry(id) {
   }
 }
 
-// Types
+// ---------------- Types ----------------
 async function loadTypes() {
   const sort = document.getElementById('type-sort').value;
   const res = await apiFetch(`${API_TYPES}?sort=${sort}`);
   const types = await res.json();
   let html = '';
   if (types.length) {
-    html = `
-      <table>
-        <thead><tr><th>ID</th><th>Nama</th><th>Jumlah</th><th>Aksi</th></tr></thead>
-        <tbody>
-          ${types.map(t => `
-            <tr>
-              <td>${t.id}</td>
-              <td>${escapeHtml(t.name)}</td>
-              <td>${t.count}</td>
-              <td>
-                <button class="btn btn-sm edit-type" data-id="${t.id}" data-name="${escapeHtml(t.name)}">Edit</button>
-                <button class="btn btn-sm btn-danger delete-type" data-id="${t.id}">Hapus</button>
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>`;
+    html = `<table>
+      <thead><tr><th>ID</th><th>Nama</th><th>Jumlah</th><th>Aksi</th></tr></thead>
+      <tbody>${types.map(t => `
+        <tr>
+          <td>${t.id}</td>
+          <td>${escapeHtml(t.name)}</td>
+          <td>${t.count}</td>
+          <td>
+            <button class="btn btn-sm edit-type" data-id="${t.id}" data-name="${escapeHtml(t.name)}">Edit</button>
+            <button class="btn btn-sm btn-danger delete-type" data-id="${t.id}">Hapus</button>
+          </td>
+        </tr>`).join('')}
+      </tbody></table>`;
   } else {
     html = '<p>Belum ada tipe.</p>';
   }
   document.getElementById('types-table').innerHTML = html;
-  attachTypeEvents();
-}
-
-function attachTypeEvents() {
-  document.querySelectorAll('.edit-type').forEach(btn => {
-    btn.addEventListener('click', () => showTypeModal(btn.dataset.id, btn.dataset.name));
-  });
-  document.querySelectorAll('.delete-type').forEach(btn => {
-    btn.addEventListener('click', () => deleteType(btn.dataset.id));
-  });
+  document.querySelectorAll('.edit-type').forEach(btn =>
+    btn.addEventListener('click', () => showTypeModal(btn.dataset.id, btn.dataset.name))
+  );
+  document.querySelectorAll('.delete-type').forEach(btn =>
+    btn.addEventListener('click', () => deleteType(btn.dataset.id))
+  );
 }
 
 function showTypeModal(id = null, name = '') {
@@ -301,7 +306,7 @@ function showTypeModal(id = null, name = '') {
 }
 
 async function deleteType(id) {
-  if (!confirm('Hapus tipe ini?')) return;
+  if (!(await confirmModal('Hapus tipe ini? Jika masih ada entri, tidak akan bisa dihapus.'))) return;
   const res = await apiFetch(`${API_TYPES}/${id}`, { method: 'DELETE' });
   if (res.ok) {
     loadTypes();
@@ -312,47 +317,35 @@ async function deleteType(id) {
   }
 }
 
-// Sources
+// ---------------- Sources ----------------
 async function loadSources() {
   const sort = document.getElementById('source-sort').value;
   const res = await apiFetch(`${API_SOURCES}?sort=${sort}`);
   const sources = await res.json();
-  let html = '';
-  if (sources.length) {
-    html = `
-      <table>
+  let html = sources.length
+    ? `<table>
         <thead><tr><th>Sumber</th><th>Jumlah</th></tr></thead>
-        <tbody>
-          ${sources.map(s => `<tr><td>${escapeHtml(s.source)}</td><td>${s.count}</td></tr>`).join('')}
-        </tbody>
-      </table>`;
-  } else {
-    html = '<p>Tidak ada sumber.</p>';
-  }
+        <tbody>${sources.map(s => `<tr><td>${escapeHtml(s.source)}</td><td>${s.count}</td></tr>`).join('')}</tbody>
+      </table>`
+    : '<p>Tidak ada sumber.</p>';
   document.getElementById('sources-table').innerHTML = html;
 }
 
-// Tags
+// ---------------- Tags ----------------
 async function loadTags() {
   const sort = document.getElementById('tag-sort').value;
   const res = await apiFetch(`${API_TAGS}?sort=${sort}`);
   const tags = await res.json();
-  let html = '';
-  if (tags.length) {
-    html = `
-      <table>
+  let html = tags.length
+    ? `<table>
         <thead><tr><th>Tag</th><th>Jumlah</th></tr></thead>
-        <tbody>
-          ${tags.map(t => `<tr><td>#${escapeHtml(t.tag)}</td><td>${t.count}</td></tr>`).join('')}
-        </tbody>
-      </table>`;
-  } else {
-    html = '<p>Tidak ada tag.</p>';
-  }
+        <tbody>${tags.map(t => `<tr><td>#${escapeHtml(t.tag)}</td><td>${t.count}</td></tr>`).join('')}</tbody>
+      </table>`
+    : '<p>Tidak ada tag.</p>';
   document.getElementById('tags-table').innerHTML = html;
 }
 
-// Event listeners for toolbar elements
+// ---------------- Toolbar event listeners ----------------
 document.getElementById('entry-search').addEventListener('input', () => { entriesPage=1; loadEntries(); });
 document.getElementById('entry-type-filter').addEventListener('change', () => { entriesPage=1; loadEntries(); });
 document.getElementById('entry-sort').addEventListener('change', () => { entriesPage=1; loadEntries(); });
@@ -362,7 +355,12 @@ document.getElementById('btn-add-type').addEventListener('click', () => showType
 document.getElementById('source-sort').addEventListener('change', loadSources);
 document.getElementById('tag-sort').addEventListener('change', loadTags);
 
-// Initial load of type filter options
+// ---------------- Mobile sidebar toggle ----------------
+document.getElementById('menuToggle')?.addEventListener('click', () => {
+  document.querySelector('.sidebar').classList.toggle('open');
+});
+
+// ---------------- Initial load ----------------
 (async function init() {
   try {
     const res = await apiFetch(API_TYPES);
@@ -372,6 +370,6 @@ document.getElementById('tag-sort').addEventListener('change', loadTags);
     types.forEach(t => {
       select.innerHTML += `<option value="${t.id}">${escapeHtml(t.name)} (${t.count})</option>`;
     });
-  } catch(err) { console.error(err); }
+  } catch (err) { console.error(err); }
   switchPage('dashboard');
 })();
