@@ -71,7 +71,7 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     ''')
-    # Pastikan kolom like_count ada (untuk upgrade dari versi lama)
+    # Pastikan kolom like_count ada (upgrade dari versi lama)
     cols = [col[1] for col in conn.execute("PRAGMA table_info(entries)").fetchall()]
     if 'like_count' not in cols:
         conn.execute("ALTER TABLE entries ADD COLUMN like_count INTEGER DEFAULT 0")
@@ -177,7 +177,6 @@ def parse_tags(tags_str):
 def index():
     return render_template('index.html')
 
-# API: Daftar Entri (dengan info like untuk visitor)
 @app.route('/api/entries')
 def api_entries():
     search = request.args.get('search', '').strip()
@@ -250,20 +249,13 @@ def api_entries():
         })
     return jsonify({'entries': result, 'page': page, 'per_page': per_page, 'total': total})
 
-# API: Like (dengan validasi & logging kuat)
 @app.route('/api/entries/<int:entry_id>/like', methods=['POST'])
 @csrf.exempt
 @limiter.limit("30 per minute;100 per hour")
 def like_entry(entry_id):
     data = request.get_json(silent=True) or {}
     visitor_id = data.get('visitor_id', '').strip()
-
-    # Validasi visitor_id
-    if not visitor_id:
-        app.logger.warning(f"Like ditolak: visitor_id kosong untuk entry {entry_id}")
-        return jsonify({'error': 'visitor_id diperlukan'}), 400
-    if len(visitor_id) < 8:
-        app.logger.warning(f"Like ditolak: visitor_id terlalu pendek ({visitor_id})")
+    if not visitor_id or len(visitor_id) < 8:
         return jsonify({'error': 'visitor_id tidak valid (min 8 karakter)'}), 400
 
     conn = get_db()
@@ -273,24 +265,19 @@ def like_entry(entry_id):
             conn.close()
             return jsonify({'error': 'Entri tidak ditemukan'}), 404
 
-        existing = conn.execute(
-            "SELECT id FROM likes WHERE entry_id = ? AND visitor_id = ?",
-            (entry_id, visitor_id)
-        ).fetchone()
+        existing = conn.execute("SELECT id FROM likes WHERE entry_id = ? AND visitor_id = ?",
+                                (entry_id, visitor_id)).fetchone()
         if existing:
             conn.close()
             return jsonify({'error': 'Anda sudah menyukai entri ini'}), 409
 
-        conn.execute("INSERT INTO likes (entry_id, visitor_id) VALUES (?, ?)",
-                     (entry_id, visitor_id))
+        conn.execute("INSERT INTO likes (entry_id, visitor_id) VALUES (?, ?)", (entry_id, visitor_id))
         conn.execute("UPDATE entries SET like_count = like_count + 1 WHERE id = ?", (entry_id,))
         conn.commit()
         new_count = conn.execute("SELECT like_count FROM entries WHERE id = ?", (entry_id,)).fetchone()['like_count']
         app.logger.info(f"Like berhasil: entry {entry_id}, visitor {visitor_id}, total {new_count}")
         return jsonify({'success': True, 'like_count': new_count})
-
-    except sqlite3.IntegrityError as e:
-        app.logger.error(f"IntegrityError like: {e}")
+    except sqlite3.IntegrityError:
         return jsonify({'error': 'Kesalahan database (mungkin duplikat)'}), 409
     except Exception as e:
         app.logger.error(f"Unexpected error like: {e}")
@@ -298,7 +285,6 @@ def like_entry(entry_id):
     finally:
         conn.close()
 
-# API: Statistik
 @app.route('/api/stats')
 def api_stats():
     conn = get_db()
@@ -322,22 +308,15 @@ def api_stats():
     })
 
 # ====================================================================
-# ADMIN BLUEPRINT (lengkap)
+# ADMIN BLUEPRINT
 # ====================================================================
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin', template_folder='templates/admin')
-
-def admin_required(f):
-    @wraps(f)
-    @login_required
-    def decorated(*args, **kwargs):
-        return f(*args, **kwargs)
-    return decorated
 
 @admin_bp.route('/login', methods=['GET', 'POST'])
 @limiter.limit("5 per minute")
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('admin.dashboard'))
+        return redirect(url_for('admin.admin_index'))
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
@@ -353,7 +332,7 @@ def login():
             next_page = request.args.get('next')
             if next_page and next_page.startswith('/'):
                 return redirect(next_page)
-            return redirect(url_for('admin.dashboard'))
+            return redirect(url_for('admin.admin_index'))
         flash('Username atau password salah.', 'error')
     return render_template('admin/login.html')
 
@@ -365,20 +344,32 @@ def logout():
     return redirect(url_for('admin.login'))
 
 @admin_bp.route('/')
-@admin_required
-def dashboard():
-    page = request.args.get('page', 1, type=int)
-    per_page = 20
-    offset = (page-1)*per_page
-    type_filter = request.args.get('type', '')
+@login_required
+def admin_index():
+    return render_template('admin/admin.html')
+
+# ====================================================================
+# API ADMIN (dengan @csrf.exempt untuk POST/PUT/DELETE)
+# ====================================================================
+
+# --- Entries ---
+@app.route('/api/admin/entries', methods=['GET'])
+@login_required
+def api_admin_entries():
     search = request.args.get('search', '').strip()
-    sort = request.args.get('sort', 'newest')
+    type_id = request.args.get('type', '').strip()
+    sort = request.args.get('sort', 'newest').strip()
+    page = max(1, request.args.get('page', 1, type=int))
+    per_page = min(max(1, request.args.get('per_page', 20, type=int)), 100)
+    offset = (page-1)*per_page
+
     conn = get_db()
+    base = "SELECT e.*, t.name as type_name FROM entries e JOIN types t ON e.type_id = t.id"
     conds = []
     params = []
-    if type_filter and type_filter.isdigit():
+    if type_id and type_id.isdigit():
         conds.append("e.type_id = ?")
-        params.append(int(type_filter))
+        params.append(int(type_id))
     if search:
         conds.append("(e.content LIKE ? OR e.source LIKE ? OR e.tags LIKE ? OR t.name LIKE ?)")
         params.extend([f"%{search}%"]*4)
@@ -393,71 +384,92 @@ def dashboard():
     }
     order = order_map.get(sort, 'e.created_at DESC')
     total = conn.execute(f"SELECT COUNT(*) as cnt FROM entries e JOIN types t ON e.type_id = t.id {where}", params).fetchone()['cnt']
-    entries = conn.execute(f"SELECT e.*, t.name as type_name FROM entries e JOIN types t ON e.type_id = t.id {where} ORDER BY {order} LIMIT ? OFFSET ?", params + [per_page, offset]).fetchall()
-    types = get_types()
+    entries = conn.execute(f"{base} {where} ORDER BY {order} LIMIT ? OFFSET ?", params + [per_page, offset]).fetchall()
     conn.close()
-    return render_template('admin/dashboard.html', entries=entries, types=types, page=page, total=total, per_page=per_page, current_type=type_filter, current_search=search, current_sort=sort)
 
-@admin_bp.route('/add', methods=['GET', 'POST'])
-@admin_required
-def add_entry():
-    if request.method == 'POST':
-        type_id = request.form.get('type_id', '').strip()
-        content = request.form.get('content', '').strip()
-        source = request.form.get('source', '').strip() or 'Anonim'
-        tags_raw = request.form.get('tags', '')
-        if not type_id or not content:
-            flash('Tipe dan konten wajib diisi.', 'error')
-            return render_template('admin/edit.html', entry=None, types=get_types())
-        tags = ','.join(parse_tags(tags_raw))
-        conn = get_db()
-        conn.execute("INSERT INTO entries (type_id, content, source, tags) VALUES (?,?,?,?)", (int(type_id), content, source, tags))
-        conn.commit()
-        conn.close()
-        flash('Entri ditambahkan.', 'success')
-        return redirect(url_for('admin.dashboard'))
-    return render_template('admin/edit.html', entry=None, types=get_types())
+    result = []
+    for e in entries:
+        result.append({
+            'id': e['id'],
+            'type_id': e['type_id'],
+            'type_name': e['type_name'],
+            'content': e['content'],
+            'source': e['source'] or 'Anonim',
+            'tags': e['tags'],
+            'like_count': e['like_count'],
+            'created_at': e['created_at']
+        })
+    return jsonify({'entries': result, 'total': total, 'page': page, 'per_page': per_page})
 
-@admin_bp.route('/edit/<int:id>', methods=['GET', 'POST'])
-@admin_required
-def edit_entry(id):
+@app.route('/api/admin/entries', methods=['POST'])
+@csrf.exempt
+@login_required
+def api_admin_create_entry():
+    data = request.get_json()
+    if not data or not data.get('type_id') or not data.get('content'):
+        return jsonify({'error': 'type_id dan content diperlukan'}), 400
+    type_id = int(data['type_id'])
+    content = data['content'].strip()
+    source = data.get('source', '').strip() or 'Anonim'
+    tags_raw = data.get('tags', '')
+    tags = ','.join(parse_tags(tags_raw))
+    conn = get_db()
+    cursor = conn.execute("INSERT INTO entries (type_id, content, source, tags, like_count) VALUES (?,?,?,?,0)",
+                          (type_id, content, source, tags))
+    new_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'id': new_id}), 201
+
+@app.route('/api/admin/entries/<int:id>', methods=['GET'])
+@login_required
+def api_admin_get_entry(id):
     conn = get_db()
     entry = conn.execute("SELECT * FROM entries WHERE id = ?", (id,)).fetchone()
-    if not entry:
-        conn.close()
-        flash('Entri tidak ditemukan.', 'error')
-        return redirect(url_for('admin.dashboard'))
-    if request.method == 'POST':
-        type_id = request.form.get('type_id', '').strip()
-        content = request.form.get('content', '').strip()
-        source = request.form.get('source', '').strip() or 'Anonim'
-        tags_raw = request.form.get('tags', '')
-        if not type_id or not content:
-            flash('Tipe dan konten wajib diisi.', 'error')
-            return render_template('admin/edit.html', entry=entry, types=get_types())
-        tags = ','.join(parse_tags(tags_raw))
-        conn.execute("UPDATE entries SET type_id=?, content=?, source=?, tags=? WHERE id=?", (int(type_id), content, source, tags, id))
-        conn.commit()
-        conn.close()
-        flash('Entri diperbarui.', 'success')
-        return redirect(url_for('admin.dashboard'))
     conn.close()
-    return render_template('admin/edit.html', entry=entry, types=get_types())
+    if not entry:
+        return jsonify({'error': 'Entri tidak ditemukan'}), 404
+    return jsonify({
+        'id': entry['id'],
+        'type_id': entry['type_id'],
+        'content': entry['content'],
+        'source': entry['source'],
+        'tags': entry['tags']
+    })
 
-@admin_bp.route('/delete/<int:id>', methods=['POST'])
-@admin_required
-def delete_entry(id):
+@app.route('/api/admin/entries/<int:id>', methods=['PUT'])
+@csrf.exempt
+@login_required
+def api_admin_update_entry(id):
+    data = request.get_json()
+    if not data or not data.get('type_id') or not data.get('content'):
+        return jsonify({'error': 'type_id dan content diperlukan'}), 400
+    type_id = int(data['type_id'])
+    content = data['content'].strip()
+    source = data.get('source', '').strip() or 'Anonim'
+    tags_raw = data.get('tags', '')
+    tags = ','.join(parse_tags(tags_raw))
+    conn = get_db()
+    conn.execute("UPDATE entries SET type_id=?, content=?, source=?, tags=? WHERE id=?",
+                 (type_id, content, source, tags, id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+@app.route('/api/admin/entries/<int:id>', methods=['DELETE'])
+@csrf.exempt
+@login_required
+def api_admin_delete_entry(id):
     conn = get_db()
     conn.execute("DELETE FROM entries WHERE id = ?", (id,))
     conn.commit()
     conn.close()
-    flash('Entri dihapus.', 'info')
-    return redirect(url_for('admin.dashboard'))
+    return jsonify({'success': True})
 
-# TYPES
-@admin_bp.route('/types')
-@admin_required
-def list_types():
+# --- Types ---
+@app.route('/api/admin/types', methods=['GET'])
+@login_required
+def api_admin_types():
     sort = request.args.get('sort', 'a-z')
     order_map = {
         'a-z': 't.name COLLATE NOCASE ASC',
@@ -471,74 +483,69 @@ def list_types():
     conn = get_db()
     types = conn.execute(f"SELECT t.*, COUNT(e.id) as cnt FROM types t LEFT JOIN entries e ON t.id = e.type_id GROUP BY t.id ORDER BY {order}").fetchall()
     conn.close()
-    return render_template('admin/types.html', types=types, current_sort=sort)
+    return jsonify([{'id': t['id'], 'name': t['name'], 'count': t['cnt']} for t in types])
 
-@admin_bp.route('/types/add', methods=['POST'])
-@admin_required
-def add_type():
-    name = request.form.get('name', '').strip().lower()
+@app.route('/api/admin/types', methods=['POST'])
+@csrf.exempt
+@login_required
+def api_admin_create_type():
+    data = request.get_json()
+    name = data.get('name', '').strip().lower()
     if not name:
-        flash('Nama tipe tidak boleh kosong.', 'error')
-        return redirect(url_for('admin.list_types'))
+        return jsonify({'error': 'Nama tipe diperlukan'}), 400
     conn = get_db()
-    if conn.execute("SELECT id FROM types WHERE name = ?", (name,)).fetchone():
-        flash('Tipe sudah ada.', 'error')
-    else:
-        conn.execute("INSERT INTO types (name) VALUES (?)", (name,))
-        conn.commit()
-        flash('Tipe berhasil ditambahkan.', 'success')
-    conn.close()
-    return redirect(url_for('admin.list_types'))
-
-@admin_bp.route('/types/edit/<int:id>', methods=['POST'])
-@admin_required
-def edit_type(id):
-    name = request.form.get('name', '').strip().lower()
-    if not name:
-        flash('Nama tipe tidak boleh kosong.', 'error')
-        return redirect(url_for('admin.list_types'))
-    conn = get_db()
-    conn.execute("UPDATE types SET name = ? WHERE id = ?", (name, id))
+    if conn.execute("SELECT id FROM types WHERE name=?", (name,)).fetchone():
+        conn.close()
+        return jsonify({'error': 'Tipe sudah ada'}), 409
+    conn.execute("INSERT INTO types (name) VALUES (?)", (name,))
     conn.commit()
     conn.close()
-    flash('Tipe diperbarui.', 'success')
-    return redirect(url_for('admin.list_types'))
+    return jsonify({'success': True}), 201
 
-@admin_bp.route('/types/delete/<int:id>', methods=['POST'])
-@admin_required
-def delete_type(id):
+@app.route('/api/admin/types/<int:id>', methods=['PUT'])
+@csrf.exempt
+@login_required
+def api_admin_update_type(id):
+    data = request.get_json()
+    name = data.get('name', '').strip().lower()
+    if not name:
+        return jsonify({'error': 'Nama tipe diperlukan'}), 400
     conn = get_db()
-    cnt = conn.execute("SELECT COUNT(*) as cnt FROM entries WHERE type_id = ?", (id,)).fetchone()['cnt']
-    if cnt > 0:
-        flash(f'Tipe masih memiliki {cnt} entri, tidak bisa dihapus.', 'error')
-    else:
-        conn.execute("DELETE FROM types WHERE id = ?", (id,))
-        conn.commit()
-        flash('Tipe dihapus.', 'info')
+    conn.execute("UPDATE types SET name=? WHERE id=?", (name, id))
+    conn.commit()
     conn.close()
-    return redirect(url_for('admin.list_types'))
+    return jsonify({'success': True})
 
-# SOURCES
-@admin_bp.route('/sources')
-@admin_required
-def list_sources():
+@app.route('/api/admin/types/<int:id>', methods=['DELETE'])
+@csrf.exempt
+@login_required
+def api_admin_delete_type(id):
+    conn = get_db()
+    cnt = conn.execute("SELECT COUNT(*) as cnt FROM entries WHERE type_id=?", (id,)).fetchone()['cnt']
+    if cnt > 0:
+        conn.close()
+        return jsonify({'error': f'Tipe masih memiliki {cnt} entri'}), 409
+    conn.execute("DELETE FROM types WHERE id=?", (id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+# --- Sources ---
+@app.route('/api/admin/sources')
+@login_required
+def api_admin_sources():
     sort = request.args.get('sort', 'a-z')
-    order_map = {
-        'a-z': 'source COLLATE NOCASE ASC',
-        'z-a': 'source COLLATE NOCASE DESC',
-        'most': 'cnt DESC',
-        'least': 'cnt ASC'
-    }
+    order_map = {'a-z': 'source COLLATE NOCASE ASC', 'z-a': 'source COLLATE NOCASE DESC', 'most': 'cnt DESC', 'least': 'cnt ASC'}
     order = order_map.get(sort, 'source COLLATE NOCASE ASC')
     conn = get_db()
     sources = conn.execute(f"SELECT source, COUNT(*) as cnt FROM entries WHERE source != 'Anonim' AND source != '' GROUP BY source ORDER BY {order}").fetchall()
     conn.close()
-    return render_template('admin/sources.html', sources=sources, current_sort=sort)
+    return jsonify([{'source': s['source'], 'count': s['cnt']} for s in sources])
 
-# TAGS
-@admin_bp.route('/tags')
-@admin_required
-def list_tags():
+# --- Tags ---
+@app.route('/api/admin/tags')
+@login_required
+def api_admin_tags():
     sort = request.args.get('sort', 'a-z')
     conn = get_db()
     rows = conn.execute("SELECT tags FROM entries WHERE tags != ''").fetchall()
@@ -556,8 +563,26 @@ def list_tags():
         items.sort(key=lambda x: x[1])
     else:
         items.sort(key=lambda x: x[0])
-    return render_template('admin/tags.html', tags=[{'tag': t, 'count': c} for t,c in items], current_sort=sort)
+    return jsonify([{'tag': t, 'count': c} for t, c in items])
 
+# --- Stats (Admin) ---
+@app.route('/api/admin/stats')
+@login_required
+def api_admin_stats():
+    conn = get_db()
+    total_entries = conn.execute("SELECT COUNT(*) as cnt FROM entries").fetchone()['cnt']
+    total_types = conn.execute("SELECT COUNT(*) as cnt FROM types").fetchone()['cnt']
+    total_likes = conn.execute("SELECT SUM(like_count) as total FROM entries").fetchone()['total'] or 0
+    conn.close()
+    return jsonify({
+        'total_entries': total_entries,
+        'total_types': total_types,
+        'total_likes': total_likes
+    })
+
+# --------------------------------------------------------------------
+# Register Blueprint & Run
+# --------------------------------------------------------------------
 app.register_blueprint(admin_bp)
 
 if __name__ == '__main__':

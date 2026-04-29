@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Arsip Rasa</title>
+    <style>
+        :root {
+            --bg: #0b0b0b; --surface: #141414; --surface2: #1e1e1e;
+            --text: #e0d7c6; --text-muted: #9a8c7a;
+            --gold: #d4af37; --gold-hover: #e0c35e;
+            --danger: #c0392b; --success: #2ecc71; --info: #3498db;
+            --radius: 12px; --transition: 0.2s ease;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: var(--bg); color: var(--text);
+            display: flex; min-height: 100vh;
+        }
+        .sidebar {
+            width: 260px; background: var(--surface);
+            border-right: 1px solid #222; padding: 1.5rem 1rem;
+            display: flex; flex-direction: column; gap: 2rem;
+            position: sticky; top: 0; height: 100vh;
+        }
+        .brand { font-size: 1.4rem; color: var(--gold); font-weight: 600; text-align: center; }
+        .nav-links { display: flex; flex-direction: column; gap: 0.5rem; }
+        .nav-link {
+            color: var(--text-muted); text-decoration: none;
+            padding: 0.7rem 1rem; border-radius: 8px;
+            display: flex; align-items: center; gap: 0.6rem;
+            transition: var(--transition); cursor: pointer;
+        }
+        .nav-link:hover, .nav-link.active { background: var(--surface2); color: var(--gold); }
+        .user-info { margin-top: auto; border-top: 1px solid #222; padding-top: 1rem; color: var(--text-muted); font-size: 0.9rem; }
+        .user-info a { color: var(--danger); text-decoration: none; }
+
+        .main-content { flex: 1; padding: 2rem; overflow-y: auto; max-width: 1300px; }
+        .page { display: none; }
+        .page.active { display: block; }
+        .page-title { font-size: 1.8rem; margin-bottom: 1.5rem; color: var(--gold); }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .stat-card {
+            background: var(--surface); border: 1px solid #222;
+            border-radius: var(--radius); padding: 1.5rem; text-align: center;
+        }
+        .stat-card .number { font-size: 2.2rem; font-weight: 600; color: var(--gold); }
+        .stat-card .label { color: var(--text-muted); font-size: 0.9rem; margin-top: 0.3rem; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; background: var(--surface); border-radius: var(--radius); overflow: hidden; }
+        th { background: var(--surface2); color: var(--gold); padding: 12px 15px; text-align: left; font-weight: 500; }
+        td { padding: 10px 15px; border-bottom: 1px solid #222; }
+        tr:hover td { background: #1a1a1a; }
+
+        .form-control { width: 100%; padding: 0.7rem 1rem; background: var(--surface2); border: 1px solid #333; border-radius: 6px; color: var(--text); font-family: inherit; outline: none; transition: var(--transition); }
+        .form-control:focus { border-color: var(--gold); }
+        textarea.form-control { min-height: 120px; }
+        select.form-control { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239a8c7a' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 1rem center; padding-right: 2.5rem; }
+
+        .btn { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.6rem 1.4rem; border-radius: 8px; font-weight: 500; text-decoration: none; cursor: pointer; border: none; color: #121212; background: var(--gold); transition: var(--transition); font-family: inherit; }
+        .btn:hover { background: var(--gold-hover); transform: translateY(-1px); }
+        .btn-outline { background: transparent; border: 1px solid var(--gold); color: var(--gold); }
+        .btn-outline:hover { background: var(--gold); color: #121212; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-danger:hover { background: #e74c3c; }
+        .btn-sm { padding: 0.4rem 1rem; font-size: 0.85rem; }
+
+        .toolbar { display: flex; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 1.5rem; align-items: center; }
+        .toolbar > * { flex: 1; min-width: 140px; }
+        .toolbar .btn, .toolbar select { flex: 0 0 auto; }
+
+        .pagination { display: flex; gap: 0.5rem; justify-content: center; margin: 1.5rem 0; }
+        .pagination a, .pagination span { padding: 0.4rem 1rem; background: var(--surface2); border-radius: 6px; color: var(--text-muted); text-decoration: none; }
+        .pagination a:hover { background: var(--gold); color: #121212; }
+
+        .modal { display: none; position: fixed; z-index: 999; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); }
+        .modal.active { display: flex; justify-content: center; align-items: center; }
+        .modal-content { background: var(--surface); border: 1px solid var(--gold); border-radius: var(--radius); padding: 2rem; max-width: 500px; width: 90%; position: relative; animation: fadeIn 0.2s ease; }
+        .modal-close { position: absolute; right: 1rem; top: 0.8rem; font-size: 1.5rem; cursor: pointer; color: var(--text-muted); transition: var(--transition); }
+        .modal-close:hover { color: var(--gold); }
+        .flash-msg { padding: 12px 20px; border-radius: 8px; margin-bottom: 1rem; background: var(--surface2); border-left: 4px solid; animation: slideIn 0.3s ease; }
+        .flash-msg.success { border-color: var(--success); }
+        .flash-msg.error { border-color: var(--danger); }
+        .flash-msg.info { border-color: var(--info); }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            .sidebar { position: static; width: 100%; height: auto; border-right: none; border-bottom: 1px solid #222; }
+            .main-content { padding: 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="brand">🕯️ Arsip Rasa</div>
+        <nav class="nav-links">
+            <a class="nav-link active" data-page="dashboard">📊 Dashboard</a>
+            <a class="nav-link" data-page="entries">📝 Entri</a>
+            <a class="nav-link" data-page="types">🏷️ Tipe</a>
+            <a class="nav-link" data-page="sources">📚 Sumber</a>
+            <a class="nav-link" data-page="tags">🔖 Tag</a>
+        </nav>
+        <div class="user-info">
+            👤 {{ current_user.username }}<br>
+            <a href="{{ url_for('admin.logout') }}">Logout</a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Dashboard -->
+        <section id="page-dashboard" class="page active">
+            <h1 class="page-title">📊 Dashboard</h1>
+            <div class="stats-grid">
+                <div class="stat-card"><div class="number" id="stat-entries">0</div><div class="label">Total Entri</div></div>
+                <div class="stat-card"><div class="number" id="stat-types">0</div><div class="label">Tipe</div></div>
+                <div class="stat-card"><div class="number" id="stat-likes">0</div><div class="label">Total Likes</div></div>
+            </div>
+            <h2 style="color:var(--gold);">📋 Entri Terbaru</h2>
+            <div id="recent-entries"></div>
+        </section>
+
+        <!-- Entries -->
+        <section id="page-entries" class="page">
+            <h1 class="page-title">📝 Semua Entri</h1>
+            <div class="toolbar">
+                <input type="text" id="entry-search" class="form-control" placeholder="Cari...">
+                <select id="entry-type-filter" class="form-control"></select>
+                <select id="entry-sort" class="form-control">
+                    <option value="newest">Terbaru</option>
+                    <option value="oldest">Terlama</option>
+                    <option value="a-z">A-Z</option>
+                    <option value="z-a">Z-A</option>
+                    <option value="most_likes">❤️ Terbanyak Like</option>
+                    <option value="least_likes">🤍 Tersedikit Like</option>
+                </select>
+                <button class="btn btn-sm" id="btn-add-entry">+ Tambah</button>
+            </div>
+            <div id="entries-table"></div>
+            <div id="entries-pagination" class="pagination"></div>
+        </section>
+
+        <!-- Types -->
+        <section id="page-types" class="page">
+            <h1 class="page-title">🏷️ Kelola Tipe</h1>
+            <div class="toolbar">
+                <select id="type-sort" class="form-control">
+                    <option value="a-z">A-Z</option>
+                    <option value="z-a">Z-A</option>
+                    <option value="newest">Terbaru</option>
+                    <option value="oldest">Terlama</option>
+                    <option value="most">Terbanyak</option>
+                    <option value="least">Tersedikit</option>
+                </select>
+                <button class="btn btn-sm" id="btn-add-type">+ Tambah Tipe</button>
+            </div>
+            <div id="types-table"></div>
+        </section>
+
+        <!-- Sources -->
+        <section id="page-sources" class="page">
+            <h1 class="page-title">📚 Sumber</h1>
+            <select id="source-sort" class="form-control" style="width:auto; margin-bottom:1rem;">
+                <option value="a-z">A-Z</option>
+                <option value="z-a">Z-A</option>
+                <option value="most">Terbanyak</option>
+                <option value="least">Tersedikit</option>
+            </select>
+            <div id="sources-table"></div>
+        </section>
+
+        <!-- Tags -->
+        <section id="page-tags" class="page">
+            <h1 class="page-title">🔖 Tag</h1>
+            <select id="tag-sort" class="form-control" style="width:auto; margin-bottom:1rem;">
+                <option value="a-z">A-Z</option>
+                <option value="z-a">Z-A</option>
+                <option value="most">Terbanyak</option>
+                <option value="least">Tersedikit</option>
+            </select>
+            <div id="tags-table"></div>
+        </section>
+    </main>
+
+    <!-- Modal -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <script src="/static/js/admin.js"></script>
+</body>
+</html>
