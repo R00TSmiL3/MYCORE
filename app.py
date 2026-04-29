@@ -160,10 +160,14 @@ def handle_csrf_error(e):
     referrer = (request.referrer or '').replace('\\', '/')
     if referrer:
         parsed = urlparse(referrer)
-        if (not parsed.scheme and not parsed.netloc) or (
-            parsed.scheme in ('http', 'https') and parsed.netloc == request.host
+        safe_path = parsed.path or ''
+        if (
+            not parsed.scheme
+            and not parsed.netloc
+            and safe_path.startswith('/')
+            and not safe_path.startswith('//')
         ):
-            return redirect(referrer)
+            return redirect(safe_path)
     return redirect(url_for('index'))
 @app.errorhandler(403)
 def forbidden(error):
