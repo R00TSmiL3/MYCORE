@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Arsip Rasa</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <style>
         :root {
             --bg: #0b0b0b; --surface: #141414; --surface2: #1e1e1e;
@@ -41,7 +42,7 @@
         .page.active { display: block; }
         .page-title { font-size: 1.8rem; margin-bottom: 1.5rem; color: var(--gold); }
 
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
         .stat-card {
             background: var(--surface); border: 1px solid #222;
             border-radius: var(--radius); padding: 1.5rem; text-align: center;
@@ -80,6 +81,7 @@
         .modal-content { background: var(--surface); border: 1px solid var(--gold); border-radius: var(--radius); padding: 2rem; max-width: 500px; width: 90%; position: relative; animation: fadeIn 0.2s ease; }
         .modal-close { position: absolute; right: 1rem; top: 0.8rem; font-size: 1.5rem; cursor: pointer; color: var(--text-muted); transition: var(--transition); }
         .modal-close:hover { color: var(--gold); }
+
         .flash-msg { padding: 12px 20px; border-radius: 8px; margin-bottom: 1rem; background: var(--surface2); border-left: 4px solid; animation: slideIn 0.3s ease; }
         .flash-msg.success { border-color: var(--success); }
         .flash-msg.error { border-color: var(--danger); }
@@ -95,7 +97,6 @@
     </style>
 </head>
 <body>
-    <!-- Sidebar -->
     <aside class="sidebar">
         <div class="brand">🕯️ Arsip Rasa</div>
         <nav class="nav-links">
@@ -111,7 +112,6 @@
         </div>
     </aside>
 
-    <!-- Main Content -->
     <main class="main-content">
         <!-- Dashboard -->
         <section id="page-dashboard" class="page active">

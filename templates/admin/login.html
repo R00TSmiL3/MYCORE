@@ -1,21 +1,71 @@
-{% extends "admin/base.html" %}
-{% block title %}Login Admin{% endblock %}
-{% block content %}
-<div style="display:flex; justify-content:center; align-items:center; min-height:70vh;">
-    <div class="card" style="width:100%; max-width:400px; text-align:center;">
-        <h1 class="card-header">Login Admin</h1>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Admin – Arsip Rasa</title>
+    <style>
+        :root {
+            --bg: #0b0b0b; --surface: #141414; --surface2: #1e1e1e;
+            --text: #e0d7c6; --gold: #d4af37; --danger: #c0392b; --success: #2ecc71;
+            --radius: 12px; --transition: 0.2s;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, sans-serif; background: var(--bg);
+            display: flex; align-items: center; justify-content: center;
+            min-height: 100vh; color: var(--text);
+        }
+        .login-card {
+            background: var(--surface); border: 1px solid var(--gold);
+            border-radius: var(--radius); padding: 2.5rem 2rem; width: 100%;
+            max-width: 380px; text-align: center;
+        }
+        h1 { color: var(--gold); margin-bottom: 1.5rem; }
+        .form-group { margin-bottom: 1.2rem; text-align: left; }
+        .form-group label { display: block; margin-bottom: 0.3rem; color: #9a8c7a; }
+        .form-control {
+            width: 100%; padding: 0.75rem 1rem; background: var(--surface2);
+            border: 1px solid #333; border-radius: 6px; color: var(--text);
+            outline: none; transition: var(--transition);
+        }
+        .form-control:focus { border-color: var(--gold); }
+        .btn {
+            width: 100%; padding: 0.75rem; background: var(--gold); color: #121212;
+            border: none; border-radius: 8px; font-weight: bold; cursor: pointer;
+            transition: var(--transition);
+        }
+        .btn:hover { background: #e0c35e; }
+        .flash-msg {
+            padding: 0.6rem 1rem; border-radius: 6px; margin-bottom: 1rem;
+            text-align: left;
+        }
+        .flash-msg.error { background: #5c1a1a; border-left: 4px solid var(--danger); }
+        .flash-msg.success { background: #1a5c1a; border-left: 4px solid var(--success); }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h1>🕯️ Admin Login</h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash-msg {{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
         <form method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label for="username">Username</label>
-                <input type="text" id="username" name="username" class="form-control" required autocomplete="username">
+                <input type="text" class="form-control" id="username" name="username" required autocomplete="username">
             </div>
             <div class="form-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" name="password" class="form-control" required autocomplete="current-password">
+                <input type="password" class="form-control" id="password" name="password" required autocomplete="current-password">
             </div>
-            <button type="submit" class="btn" style="width:100%;">Login</button>
+            <button type="submit" class="btn">Masuk</button>
         </form>
     </div>
-</div>
-{% endblock %}
+</body>
+</html>

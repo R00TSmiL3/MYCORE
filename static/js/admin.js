@@ -1,6 +1,11 @@
-/**
- * admin.js – Single Page Admin Panel for Arsip Rasa
- */
+// admin.js – SPA Admin Panel with CSRF protection
+const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+
+function apiFetch(url, options = {}) {
+  if (!options.headers) options.headers = {};
+  options.headers['X-CSRFToken'] = csrfToken;
+  return fetch(url, options);
+}
 
 const API_ENTRIES = '/api/admin/entries';
 const API_TYPES = '/api/admin/types';
@@ -8,17 +13,15 @@ const API_SOURCES = '/api/admin/sources';
 const API_TAGS = '/api/admin/tags';
 const API_STATS = '/api/admin/stats';
 
-// ---- State ----
 let currentPage = 'dashboard';
 let entriesPage = 1, entriesTotal = 0;
 let entrySearch = '', entryFilterType = '', entrySort = 'newest';
 
-// ---- Navigation ----
+// Navigation
 document.querySelectorAll('.nav-link').forEach(link => {
-  link.addEventListener('click', (e) => {
+  link.addEventListener('click', e => {
     e.preventDefault();
-    const page = link.dataset.page;
-    switchPage(page);
+    switchPage(link.dataset.page);
   });
 });
 
@@ -35,7 +38,7 @@ function switchPage(page) {
   else if (page === 'tags') loadTags();
 }
 
-// ---- Flash message helper ----
+// Flash message
 function showFlash(msg, type = 'info') {
   const flash = document.createElement('div');
   flash.className = `flash-msg ${type}`;
@@ -44,7 +47,7 @@ function showFlash(msg, type = 'info') {
   setTimeout(() => flash.remove(), 4000);
 }
 
-// ---- Modal ----
+// Modal helpers
 function openModal(html) {
   document.getElementById('modal-body').innerHTML = html;
   document.getElementById('modal').classList.add('active');
@@ -53,75 +56,57 @@ function closeModal() {
   document.getElementById('modal').classList.remove('active');
 }
 document.querySelector('.modal-close').addEventListener('click', closeModal);
-window.addEventListener('click', (e) => {
+window.addEventListener('click', e => {
   if (e.target === document.getElementById('modal')) closeModal();
 });
 
-// ---- Dashboard ----
+// Dashboard
 async function loadDashboard() {
   try {
-    const res = await fetch(API_STATS);
-    const stats = await res.json();
+    const statsRes = await apiFetch(API_STATS);
+    const stats = await statsRes.json();
     document.getElementById('stat-entries').textContent = stats.total_entries;
     document.getElementById('stat-types').textContent = stats.total_types;
     document.getElementById('stat-likes').textContent = stats.total_likes;
 
-    const entriesRes = await fetch(`${API_ENTRIES}?per_page=5&sort=newest`);
+    const entriesRes = await apiFetch(`${API_ENTRIES}?per_page=5&sort=newest`);
     const data = await entriesRes.json();
+    let html = '';
     if (data.entries.length) {
-      const html = `
-        <table>
-          <thead><tr><th>ID</th><th>Tipe</th><th>Konten</th><th>Sumber</th><th>Likes</th></tr></thead>
-          <tbody>
-            ${data.entries.map(e => `
-              <tr>
-                <td>${e.id}</td><td>${e.type_name}</td>
-                <td>${e.content.substring(0,60)}...</td>
-                <td>${e.source}</td><td>${e.like_count}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>`;
-      document.getElementById('recent-entries').innerHTML = html;
-    } else {
-      document.getElementById('recent-entries').innerHTML = '<p>Belum ada entri.</p>';
-    }
+      html = `<table><thead><tr><th>ID</th><th>Tipe</th><th>Konten</th><th>Sumber</th><th>Likes</th></tr></thead><tbody>
+        ${data.entries.map(e => `<tr><td>${e.id}</td><td>${e.type_name}</td><td>${e.content.substring(0,60)}...</td><td>${e.source}</td><td>${e.like_count}</td></tr>`).join('')}
+      </tbody></table>`;
+    } else html = '<p>Belum ada entri.</p>';
+    document.getElementById('recent-entries').innerHTML = html;
   } catch (err) {
     console.error(err);
     showFlash('Gagal memuat dashboard.', 'error');
   }
 }
 
-// ---- Entries ----
+// Entries
 async function loadEntries() {
   entrySearch = document.getElementById('entry-search').value.trim();
   entryFilterType = document.getElementById('entry-type-filter').value;
   entrySort = document.getElementById('entry-sort').value;
-  const params = new URLSearchParams({
-    page: entriesPage, per_page: 20, sort: entrySort,
-    search: entrySearch, type: entryFilterType
-  });
+  const params = new URLSearchParams({ page: entriesPage, per_page: 20, sort: entrySort, search: entrySearch, type: entryFilterType });
   try {
-    const res = await fetch(`${API_ENTRIES}?${params}`);
+    const res = await apiFetch(`${API_ENTRIES}?${params}`);
     const data = await res.json();
     entriesTotal = data.total;
-    const html = data.entries.length ? `
-      <table>
-        <thead><tr><th>ID</th><th>Tipe</th><th>Konten</th><th>Sumber</th><th>Tag</th><th>Likes</th><th>Aksi</th></tr></thead>
-        <tbody>
-          ${data.entries.map(e => `
-            <tr>
-              <td>${e.id}</td><td>${e.type_name}</td>
-              <td>${e.content.substring(0,60)}...</td>
-              <td>${e.source}</td><td>${e.tags}</td><td>${e.like_count}</td>
-              <td>
-                <button class="btn btn-sm edit-entry" data-id="${e.id}">Edit</button>
-                <button class="btn btn-sm btn-danger delete-entry" data-id="${e.id}">Hapus</button>
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>` : '<p>Tidak ada entri.</p>';
+    let html = '';
+    if (data.entries.length) {
+      html = `<table><thead><tr><th>ID</th><th>Tipe</th><th>Konten</th><th>Sumber</th><th>Tag</th><th>Likes</th><th>Aksi</th></tr></thead><tbody>
+        ${data.entries.map(e => `
+          <tr>
+            <td>${e.id}</td><td>${e.type_name}</td><td>${e.content.substring(0,60)}...</td><td>${e.source}</td><td>${e.tags}</td><td>${e.like_count}</td>
+            <td>
+              <button class="btn btn-sm edit-entry" data-id="${e.id}">Edit</button>
+              <button class="btn btn-sm btn-danger delete-entry" data-id="${e.id}">Hapus</button>
+            </td>
+          </tr>`).join('')}
+      </tbody></table>`;
+    } else html = '<p>Tidak ada entri.</p>';
     document.getElementById('entries-table').innerHTML = html;
     renderEntriesPagination();
     attachEntryEvents();
@@ -139,7 +124,7 @@ function renderEntriesPagination() {
   if (entriesPage < totalPages) html += `<a href="#" data-page="${entriesPage+1}">→</a>`;
   document.getElementById('entries-pagination').innerHTML = html;
   document.querySelectorAll('#entries-pagination a').forEach(a => {
-    a.addEventListener('click', (e) => {
+    a.addEventListener('click', e => {
       e.preventDefault();
       entriesPage = parseInt(a.dataset.page);
       loadEntries();
@@ -148,20 +133,16 @@ function renderEntriesPagination() {
 }
 
 function attachEntryEvents() {
-  document.querySelectorAll('.edit-entry').forEach(btn => {
-    btn.addEventListener('click', () => showEntryModal(btn.dataset.id));
-  });
-  document.querySelectorAll('.delete-entry').forEach(btn => {
-    btn.addEventListener('click', () => deleteEntry(btn.dataset.id));
-  });
+  document.querySelectorAll('.edit-entry').forEach(btn => btn.addEventListener('click', () => showEntryModal(btn.dataset.id)));
+  document.querySelectorAll('.delete-entry').forEach(btn => btn.addEventListener('click', () => deleteEntry(btn.dataset.id)));
 }
 
 async function showEntryModal(id = null) {
-  const typesRes = await fetch(API_TYPES);
+  const typesRes = await apiFetch(API_TYPES);
   const types = await typesRes.json();
   let entry = { type_id: '', content: '', source: '', tags: '' };
   if (id) {
-    const res = await fetch(`${API_ENTRIES}/${id}`);
+    const res = await apiFetch(`${API_ENTRIES}/${id}`);
     if (res.ok) entry = await res.json();
     else return showFlash('Entri tidak ditemukan.', 'error');
   }
@@ -171,7 +152,7 @@ async function showEntryModal(id = null) {
       <select id="modal-type" class="form-control">${types.map(t => `<option value="${t.id}" ${t.id==entry.type_id?'selected':''}>${t.name}</option>`).join('')}</select>
       <textarea id="modal-content" class="form-control" rows="5">${entry.content}</textarea>
       <input type="text" id="modal-source" class="form-control" value="${entry.source}" placeholder="Sumber">
-      <input type="text" id="modal-tags" class="form-control" value="${entry.tags}" placeholder="Tag (pisahkan dengan koma)">
+      <input type="text" id="modal-tags" class="form-control" value="${entry.tags}" placeholder="Tag (pisahkan koma)">
       <button class="btn" id="save-entry">Simpan</button>
     </div>
   `);
@@ -184,7 +165,7 @@ async function showEntryModal(id = null) {
     };
     const method = id ? 'PUT' : 'POST';
     const url = id ? `${API_ENTRIES}/${id}` : API_ENTRIES;
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -202,49 +183,35 @@ async function showEntryModal(id = null) {
 
 async function deleteEntry(id) {
   if (!confirm('Hapus entri ini?')) return;
-  const res = await fetch(`${API_ENTRIES}/${id}`, { method: 'DELETE' });
+  const res = await apiFetch(`${API_ENTRIES}/${id}`, { method: 'DELETE' });
   if (res.ok) {
     loadEntries();
     showFlash('Entri dihapus.', 'info');
   }
 }
 
-// ---- Types ----
+// Types
 async function loadTypes() {
   const sort = document.getElementById('type-sort').value;
-  try {
-    const res = await fetch(`${API_TYPES}?sort=${sort}`);
-    const types = await res.json();
-    const html = types.length ? `
-      <table>
-        <thead><tr><th>ID</th><th>Nama</th><th>Jumlah</th><th>Aksi</th></tr></thead>
-        <tbody>
-          ${types.map(t => `
-            <tr>
-              <td>${t.id}</td><td>${t.name}</td><td>${t.count}</td>
-              <td>
-                <button class="btn btn-sm edit-type" data-id="${t.id}" data-name="${t.name}">Edit</button>
-                <button class="btn btn-sm btn-danger delete-type" data-id="${t.id}">Hapus</button>
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>` : '<p>Belum ada tipe.</p>';
-    document.getElementById('types-table').innerHTML = html;
-    attachTypeEvents();
-  } catch (err) {
-    console.error(err);
-    showFlash('Gagal memuat tipe.', 'error');
-  }
+  const res = await apiFetch(`${API_TYPES}?sort=${sort}`);
+  const types = await res.json();
+  let html = '';
+  if (types.length) {
+    html = `<table><thead><tr><th>ID</th><th>Nama</th><th>Jumlah</th><th>Aksi</th></tr></thead><tbody>
+      ${types.map(t => `<tr><td>${t.id}</td><td>${t.name}</td><td>${t.count}</td>
+        <td>
+          <button class="btn btn-sm edit-type" data-id="${t.id}" data-name="${t.name}">Edit</button>
+          <button class="btn btn-sm btn-danger delete-type" data-id="${t.id}">Hapus</button>
+        </td></tr>`).join('')}
+    </tbody></table>`;
+  } else html = '<p>Belum ada tipe.</p>';
+  document.getElementById('types-table').innerHTML = html;
+  attachTypeEvents();
 }
 
 function attachTypeEvents() {
-  document.querySelectorAll('.edit-type').forEach(btn => {
-    btn.addEventListener('click', () => showTypeModal(btn.dataset.id, btn.dataset.name));
-  });
-  document.querySelectorAll('.delete-type').forEach(btn => {
-    btn.addEventListener('click', () => deleteType(btn.dataset.id));
-  });
+  document.querySelectorAll('.edit-type').forEach(btn => btn.addEventListener('click', () => showTypeModal(btn.dataset.id, btn.dataset.name)));
+  document.querySelectorAll('.delete-type').forEach(btn => btn.addEventListener('click', () => deleteType(btn.dataset.id)));
 }
 
 function showTypeModal(id = null, name = '') {
@@ -260,7 +227,7 @@ function showTypeModal(id = null, name = '') {
     if (!newName) return showFlash('Nama tipe diperlukan.', 'error');
     const method = id ? 'PUT' : 'POST';
     const url = id ? `${API_TYPES}/${id}` : API_TYPES;
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: newName })
@@ -278,78 +245,56 @@ function showTypeModal(id = null, name = '') {
 
 async function deleteType(id) {
   if (!confirm('Hapus tipe ini?')) return;
-  const res = await fetch(`${API_TYPES}/${id}`, { method: 'DELETE' });
+  const res = await apiFetch(`${API_TYPES}/${id}`, { method: 'DELETE' });
   if (res.ok) {
     loadTypes();
     showFlash('Tipe dihapus.', 'info');
   } else {
     const err = await res.json();
-    showFlash(err.error || 'Gagal menghapus.', 'error');
+    showFlash(err.error, 'error');
   }
 }
 
-// ---- Sources ----
+// Sources
 async function loadSources() {
   const sort = document.getElementById('source-sort').value;
-  try {
-    const res = await fetch(`${API_SOURCES}?sort=${sort}`);
-    const sources = await res.json();
-    const html = sources.length ? `
-      <table>
-        <thead><tr><th>Sumber</th><th>Jumlah</th></tr></thead>
-        <tbody>
-          ${sources.map(s => `<tr><td>${s.source}</td><td>${s.count}</td></tr>`).join('')}
-        </tbody>
-      </table>` : '<p>Tidak ada sumber.</p>';
-    document.getElementById('sources-table').innerHTML = html;
-  } catch (err) {
-    console.error(err);
-    showFlash('Gagal memuat sumber.', 'error');
-  }
+  const res = await apiFetch(`${API_SOURCES}?sort=${sort}`);
+  const sources = await res.json();
+  let html = sources.length ? `<table><thead><tr><th>Sumber</th><th>Jumlah</th></tr></thead><tbody>
+    ${sources.map(s => `<tr><td>${s.source}</td><td>${s.count}</td></tr>`).join('')}
+  </tbody></table>` : '<p>Tidak ada sumber.</p>';
+  document.getElementById('sources-table').innerHTML = html;
 }
 
-// ---- Tags ----
+// Tags
 async function loadTags() {
   const sort = document.getElementById('tag-sort').value;
-  try {
-    const res = await fetch(`${API_TAGS}?sort=${sort}`);
-    const tags = await res.json();
-    const html = tags.length ? `
-      <table>
-        <thead><tr><th>Tag</th><th>Jumlah</th></tr></thead>
-        <tbody>
-          ${tags.map(t => `<tr><td>#${t.tag}</td><td>${t.count}</td></tr>`).join('')}
-        </tbody>
-      </table>` : '<p>Tidak ada tag.</p>';
-    document.getElementById('tags-table').innerHTML = html;
-  } catch (err) {
-    console.error(err);
-    showFlash('Gagal memuat tag.', 'error');
-  }
+  const res = await apiFetch(`${API_TAGS}?sort=${sort}`);
+  const tags = await res.json();
+  let html = tags.length ? `<table><thead><tr><th>Tag</th><th>Jumlah</th></tr></thead><tbody>
+    ${tags.map(t => `<tr><td>#${t.tag}</td><td>${t.count}</td></tr>`).join('')}
+  </tbody></table>` : '<p>Tidak ada tag.</p>';
+  document.getElementById('tags-table').innerHTML = html;
 }
 
-// ---- Event Listeners for filters/sorts ----
+// Event listeners for toolbar elements
 document.getElementById('entry-search').addEventListener('input', () => { entriesPage=1; loadEntries(); });
 document.getElementById('entry-type-filter').addEventListener('change', () => { entriesPage=1; loadEntries(); });
 document.getElementById('entry-sort').addEventListener('change', () => { entriesPage=1; loadEntries(); });
 document.getElementById('btn-add-entry').addEventListener('click', () => showEntryModal());
-
 document.getElementById('type-sort').addEventListener('change', loadTypes);
 document.getElementById('btn-add-type').addEventListener('click', () => showTypeModal());
-
 document.getElementById('source-sort').addEventListener('change', loadSources);
 document.getElementById('tag-sort').addEventListener('change', loadTags);
 
-// ---- Populate type filter di entries ----
+// Initial load of type filter options
 (async function init() {
   try {
-    const res = await fetch(API_TYPES);
+    const res = await apiFetch(API_TYPES);
     const types = await res.json();
     const select = document.getElementById('entry-type-filter');
     select.innerHTML = '<option value="">Semua Tipe</option>';
-    types.forEach(t => {
-      select.innerHTML += `<option value="${t.id}">${t.name} (${t.count})</option>`;
-    });
-  } catch (err) { console.error(err); }
+    types.forEach(t => { select.innerHTML += `<option value="${t.id}">${t.name} (${t.count})</option>`; });
+  } catch(err) { console.error(err); }
   switchPage('dashboard');
 })();
