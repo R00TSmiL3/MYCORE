@@ -1,5 +1,6 @@
 import os, time, sqlite3, logging
 from functools import wraps
+from urllib.parse import urlparse
 from flask import (Flask, render_template, request, redirect, url_for,
                    flash, jsonify, Blueprint, abort)
 from flask_login import (LoginManager, UserMixin, login_user,
@@ -91,7 +92,7 @@ with app.app_context():
     init_db()
 
 # --------------------------------------------------------------------
-# Logging & IP Blocker
+# Security utilities
 # --------------------------------------------------------------------
 forbidden_logger = logging.getLogger('forbidden')
 forbidden_logger.setLevel(logging.INFO)
@@ -114,6 +115,18 @@ def block_ip(ip, duration=10):
 def check_block():
     if is_ip_blocked(request.remote_addr):
         abort(403)
+
+def is_safe_redirect_url(target):
+    """Only allow relative URLs (no host) to prevent open redirect."""
+    if not target:
+        return False
+    if '://' in target:
+        return False
+    if not target.startswith('/'):
+        return False
+    if any(c in target for c in '\r\n'):
+        return False
+    return True
 
 # --------------------------------------------------------------------
 # User model
@@ -336,7 +349,7 @@ def login():
             login_user(User(user_row['id'], user_row['username']))
             flash('Berhasil login.', 'success')
             next_page = request.args.get('next')
-            if next_page and next_page.startswith('/'):
+            if next_page and is_safe_redirect_url(next_page):
                 return redirect(next_page)
             return redirect(url_for('admin.admin_index'))
         flash('Username atau password salah.', 'error')
