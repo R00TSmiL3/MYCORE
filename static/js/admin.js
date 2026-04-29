@@ -1,10 +1,23 @@
-// admin.js – SPA Admin Panel with CSRF protection
+// admin.js – SPA Admin Panel with CSRF and HTML escaping
+
+// CSRF token from meta tag
 const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 
 function apiFetch(url, options = {}) {
   if (!options.headers) options.headers = {};
   options.headers['X-CSRFToken'] = csrfToken;
   return fetch(url, options);
+}
+
+// --- HTML escape function (prevents XSS) ---
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 const API_ENTRIES = '/api/admin/entries';
@@ -42,7 +55,7 @@ function switchPage(page) {
 function showFlash(msg, type = 'info') {
   const flash = document.createElement('div');
   flash.className = `flash-msg ${type}`;
-  flash.textContent = msg;
+  flash.textContent = msg; // safe, no HTML
   document.querySelector('.main-content').prepend(flash);
   setTimeout(() => flash.remove(), 4000);
 }
@@ -73,10 +86,24 @@ async function loadDashboard() {
     const data = await entriesRes.json();
     let html = '';
     if (data.entries.length) {
-      html = `<table><thead><tr><th>ID</th><th>Tipe</th><th>Konten</th><th>Sumber</th><th>Likes</th></tr></thead><tbody>
-        ${data.entries.map(e => `<tr><td>${e.id}</td><td>${e.type_name}</td><td>${e.content.substring(0,60)}...</td><td>${e.source}</td><td>${e.like_count}</td></tr>`).join('')}
-      </tbody></table>`;
-    } else html = '<p>Belum ada entri.</p>';
+      html = `
+        <table>
+          <thead><tr><th>ID</th><th>Tipe</th><th>Konten</th><th>Sumber</th><th>Likes</th></tr></thead>
+          <tbody>
+            ${data.entries.map(e => `
+              <tr>
+                <td>${e.id}</td>
+                <td>${escapeHtml(e.type_name)}</td>
+                <td>${escapeHtml(e.content.substring(0,60))}...</td>
+                <td>${escapeHtml(e.source)}</td>
+                <td>${e.like_count}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`;
+    } else {
+      html = '<p>Belum ada entri.</p>';
+    }
     document.getElementById('recent-entries').innerHTML = html;
   } catch (err) {
     console.error(err);
@@ -96,17 +123,29 @@ async function loadEntries() {
     entriesTotal = data.total;
     let html = '';
     if (data.entries.length) {
-      html = `<table><thead><tr><th>ID</th><th>Tipe</th><th>Konten</th><th>Sumber</th><th>Tag</th><th>Likes</th><th>Aksi</th></tr></thead><tbody>
-        ${data.entries.map(e => `
-          <tr>
-            <td>${e.id}</td><td>${e.type_name}</td><td>${e.content.substring(0,60)}...</td><td>${e.source}</td><td>${e.tags}</td><td>${e.like_count}</td>
-            <td>
-              <button class="btn btn-sm edit-entry" data-id="${e.id}">Edit</button>
-              <button class="btn btn-sm btn-danger delete-entry" data-id="${e.id}">Hapus</button>
-            </td>
-          </tr>`).join('')}
-      </tbody></table>`;
-    } else html = '<p>Tidak ada entri.</p>';
+      html = `
+        <table>
+          <thead><tr><th>ID</th><th>Tipe</th><th>Konten</th><th>Sumber</th><th>Tag</th><th>Likes</th><th>Aksi</th></tr></thead>
+          <tbody>
+            ${data.entries.map(e => `
+              <tr>
+                <td>${e.id}</td>
+                <td>${escapeHtml(e.type_name)}</td>
+                <td>${escapeHtml(e.content.substring(0,60))}...</td>
+                <td>${escapeHtml(e.source)}</td>
+                <td>${escapeHtml(e.tags)}</td>
+                <td>${e.like_count}</td>
+                <td>
+                  <button class="btn btn-sm edit-entry" data-id="${e.id}">Edit</button>
+                  <button class="btn btn-sm btn-danger delete-entry" data-id="${e.id}">Hapus</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`;
+    } else {
+      html = '<p>Tidak ada entri.</p>';
+    }
     document.getElementById('entries-table').innerHTML = html;
     renderEntriesPagination();
     attachEntryEvents();
@@ -146,13 +185,15 @@ async function showEntryModal(id = null) {
     if (res.ok) entry = await res.json();
     else return showFlash('Entri tidak ditemukan.', 'error');
   }
+  // Note: Values inserted into input/textarea are safe without escaping,
+  // but if we ever embed in HTML context we must escape.
   openModal(`
     <h3>${id ? 'Edit Entri' : 'Tambah Entri'}</h3>
     <div style="display:flex;flex-direction:column;gap:1rem;margin-top:1rem;">
-      <select id="modal-type" class="form-control">${types.map(t => `<option value="${t.id}" ${t.id==entry.type_id?'selected':''}>${t.name}</option>`).join('')}</select>
-      <textarea id="modal-content" class="form-control" rows="5">${entry.content}</textarea>
-      <input type="text" id="modal-source" class="form-control" value="${entry.source}" placeholder="Sumber">
-      <input type="text" id="modal-tags" class="form-control" value="${entry.tags}" placeholder="Tag (pisahkan koma)">
+      <select id="modal-type" class="form-control">${types.map(t => `<option value="${t.id}" ${t.id==entry.type_id?'selected':''}>${escapeHtml(t.name)}</option>`).join('')}</select>
+      <textarea id="modal-content" class="form-control" rows="5">${escapeHtml(entry.content)}</textarea>
+      <input type="text" id="modal-source" class="form-control" value="${escapeHtml(entry.source)}" placeholder="Sumber">
+      <input type="text" id="modal-tags" class="form-control" value="${escapeHtml(entry.tags)}" placeholder="Tag (pisahkan koma)">
       <button class="btn" id="save-entry">Simpan</button>
     </div>
   `);
@@ -197,28 +238,44 @@ async function loadTypes() {
   const types = await res.json();
   let html = '';
   if (types.length) {
-    html = `<table><thead><tr><th>ID</th><th>Nama</th><th>Jumlah</th><th>Aksi</th></tr></thead><tbody>
-      ${types.map(t => `<tr><td>${t.id}</td><td>${t.name}</td><td>${t.count}</td>
-        <td>
-          <button class="btn btn-sm edit-type" data-id="${t.id}" data-name="${t.name}">Edit</button>
-          <button class="btn btn-sm btn-danger delete-type" data-id="${t.id}">Hapus</button>
-        </td></tr>`).join('')}
-    </tbody></table>`;
-  } else html = '<p>Belum ada tipe.</p>';
+    html = `
+      <table>
+        <thead><tr><th>ID</th><th>Nama</th><th>Jumlah</th><th>Aksi</th></tr></thead>
+        <tbody>
+          ${types.map(t => `
+            <tr>
+              <td>${t.id}</td>
+              <td>${escapeHtml(t.name)}</td>
+              <td>${t.count}</td>
+              <td>
+                <button class="btn btn-sm edit-type" data-id="${t.id}" data-name="${escapeHtml(t.name)}">Edit</button>
+                <button class="btn btn-sm btn-danger delete-type" data-id="${t.id}">Hapus</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>`;
+  } else {
+    html = '<p>Belum ada tipe.</p>';
+  }
   document.getElementById('types-table').innerHTML = html;
   attachTypeEvents();
 }
 
 function attachTypeEvents() {
-  document.querySelectorAll('.edit-type').forEach(btn => btn.addEventListener('click', () => showTypeModal(btn.dataset.id, btn.dataset.name)));
-  document.querySelectorAll('.delete-type').forEach(btn => btn.addEventListener('click', () => deleteType(btn.dataset.id)));
+  document.querySelectorAll('.edit-type').forEach(btn => {
+    btn.addEventListener('click', () => showTypeModal(btn.dataset.id, btn.dataset.name));
+  });
+  document.querySelectorAll('.delete-type').forEach(btn => {
+    btn.addEventListener('click', () => deleteType(btn.dataset.id));
+  });
 }
 
 function showTypeModal(id = null, name = '') {
   openModal(`
     <h3>${id ? 'Edit Tipe' : 'Tambah Tipe'}</h3>
     <div style="display:flex;flex-direction:column;gap:1rem;margin-top:1rem;">
-      <input type="text" id="modal-type-name" class="form-control" value="${name}" placeholder="Nama tipe">
+      <input type="text" id="modal-type-name" class="form-control" value="${escapeHtml(name)}" placeholder="Nama tipe">
       <button class="btn" id="save-type">Simpan</button>
     </div>
   `);
@@ -260,9 +317,18 @@ async function loadSources() {
   const sort = document.getElementById('source-sort').value;
   const res = await apiFetch(`${API_SOURCES}?sort=${sort}`);
   const sources = await res.json();
-  let html = sources.length ? `<table><thead><tr><th>Sumber</th><th>Jumlah</th></tr></thead><tbody>
-    ${sources.map(s => `<tr><td>${s.source}</td><td>${s.count}</td></tr>`).join('')}
-  </tbody></table>` : '<p>Tidak ada sumber.</p>';
+  let html = '';
+  if (sources.length) {
+    html = `
+      <table>
+        <thead><tr><th>Sumber</th><th>Jumlah</th></tr></thead>
+        <tbody>
+          ${sources.map(s => `<tr><td>${escapeHtml(s.source)}</td><td>${s.count}</td></tr>`).join('')}
+        </tbody>
+      </table>`;
+  } else {
+    html = '<p>Tidak ada sumber.</p>';
+  }
   document.getElementById('sources-table').innerHTML = html;
 }
 
@@ -271,9 +337,18 @@ async function loadTags() {
   const sort = document.getElementById('tag-sort').value;
   const res = await apiFetch(`${API_TAGS}?sort=${sort}`);
   const tags = await res.json();
-  let html = tags.length ? `<table><thead><tr><th>Tag</th><th>Jumlah</th></tr></thead><tbody>
-    ${tags.map(t => `<tr><td>#${t.tag}</td><td>${t.count}</td></tr>`).join('')}
-  </tbody></table>` : '<p>Tidak ada tag.</p>';
+  let html = '';
+  if (tags.length) {
+    html = `
+      <table>
+        <thead><tr><th>Tag</th><th>Jumlah</th></tr></thead>
+        <tbody>
+          ${tags.map(t => `<tr><td>#${escapeHtml(t.tag)}</td><td>${t.count}</td></tr>`).join('')}
+        </tbody>
+      </table>`;
+  } else {
+    html = '<p>Tidak ada tag.</p>';
+  }
   document.getElementById('tags-table').innerHTML = html;
 }
 
@@ -294,7 +369,9 @@ document.getElementById('tag-sort').addEventListener('change', loadTags);
     const types = await res.json();
     const select = document.getElementById('entry-type-filter');
     select.innerHTML = '<option value="">Semua Tipe</option>';
-    types.forEach(t => { select.innerHTML += `<option value="${t.id}">${t.name} (${t.count})</option>`; });
+    types.forEach(t => {
+      select.innerHTML += `<option value="${t.id}">${escapeHtml(t.name)} (${t.count})</option>`;
+    });
   } catch(err) { console.error(err); }
   switchPage('dashboard');
 })();
