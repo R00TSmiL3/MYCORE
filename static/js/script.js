@@ -16,6 +16,7 @@ function generateVisitorId() {
     return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
   });
 }
+
 let visitorId = localStorage.getItem('visitor_id');
 if (!visitorId || visitorId.length < 8) {
   visitorId = generateVisitorId();
@@ -60,6 +61,7 @@ function showToast(msg, type = 'info') {
 function getBookmarks() {
   return JSON.parse(localStorage.getItem('bookmarks') || '[]');
 }
+
 function saveBookmarks(list) {
   localStorage.setItem('bookmarks', JSON.stringify(list));
 }
@@ -73,6 +75,45 @@ function renderCards(entries) {
     const typeClass = `type-${e.type.toLowerCase().replace(/[^a-z]/g, '')}`;
     const isLiked = e.user_liked;
     const isBookmarked = bookmarks.includes(e.id);
+
+    // Tombol like
+    const likeHtml = `
+      <button class="like-btn ${isLiked ? 'liked' : ''}" data-entry-id="${e.id}" ${isLiked ? 'disabled' : ''}>
+        <svg viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+        </svg>
+        <span class="like-count">${e.like_count}</span>
+      </button>`;
+
+    // Tombol bookmark
+    const bookmarkHtml = `
+      <button class="bookmark-btn ${isBookmarked ? 'bookmarked' : ''}" data-entry-id="${e.id}">
+        <svg viewBox="0 0 24 24" fill="${isBookmarked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+        </svg>
+      </button>`;
+
+    // Tombol copy
+    const copyHtml = `
+      <button class="copy-btn" data-text="${escapeHtml(e.content)}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+        </svg>
+      </button>`;
+
+    // Tombol share
+    const shareHtml = `
+      <button class="share-btn" data-text="${escapeHtml(e.content)}" data-source="${escapeHtml(e.source)}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="18" cy="5" r="3"/>
+          <circle cx="6" cy="12" r="3"/>
+          <circle cx="18" cy="19" r="3"/>
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+        </svg>
+      </button>`;
+
     card.innerHTML = `
       <span class="type-badge ${typeClass}">${e.type.toUpperCase()}</span>
       <div class="content">${escapeHtml(e.content)}</div>
@@ -81,15 +122,13 @@ function renderCards(entries) {
         <div class="tags">${e.tags.map(t => `<span class="tag">#${escapeHtml(t)}</span>`).join('')}</div>
       </div>
       <div class="actions">
-        <button class="like-btn ${isLiked ? 'liked' : ''}" data-entry-id="${e.id}" ${isLiked ? 'disabled' : ''}>
-          <span class="heart">${isLiked ? '❤️' : '🤍'}</span>
-          <span class="like-count">${e.like_count}</span>
-        </button>
-        <button class="bookmark-btn ${isBookmarked ? 'bookmarked' : ''}" data-entry-id="${e.id}" title="Bookmark">🔖</button>
-        <button class="copy-btn" data-text="${escapeHtml(e.content)}" title="Salin">📋</button>
-        <button class="share-btn" data-text="${escapeHtml(e.content)}" data-source="${escapeHtml(e.source)}" title="Bagikan">🔗</button>
+        ${likeHtml}
+        ${bookmarkHtml}
+        ${copyHtml}
+        ${shareHtml}
       </div>`;
-    // event listeners
+
+    // Event listeners
     card.querySelector('.like-btn').addEventListener('click', handleLike);
     card.querySelector('.bookmark-btn').addEventListener('click', toggleBookmark);
     card.querySelector('.copy-btn').addEventListener('click', copyText);
@@ -111,7 +150,7 @@ async function handleLike(e) {
     });
     const data = await res.json();
     if (res.ok) {
-      btn.querySelector('.heart').textContent = '❤️';
+      btn.querySelector('svg').setAttribute('fill', 'currentColor');
       btn.querySelector('.like-count').textContent = data.like_count;
       btn.classList.add('liked');
       btn.disabled = true;
@@ -133,10 +172,12 @@ function toggleBookmark(e) {
   if (bookmarks.includes(id)) {
     bookmarks = bookmarks.filter(bid => bid !== id);
     btn.classList.remove('bookmarked');
+    btn.querySelector('svg').setAttribute('fill', 'none');
     showToast('Dihapus dari bookmark', 'info');
   } else {
     bookmarks.push(id);
     btn.classList.add('bookmarked');
+    btn.querySelector('svg').setAttribute('fill', 'currentColor');
     showToast('Ditambahkan ke bookmark', 'success');
   }
   saveBookmarks(bookmarks);
@@ -155,9 +196,9 @@ function shareEntry(e) {
   const url = window.location.href.split('?')[0];
   const shareData = { title: 'Arsip Rasa', text: `"${text}"\n— ${source}\n`, url };
   if (navigator.share) {
-    navigator.share(shareData);
+    navigator.share(shareData).catch(() => {});
   } else {
-    navigator.clipboard.writeText(`${text}\n— ${source}\n${url}`).then(() => showToast('Tautan disalin!', 'success'));
+    navigator.clipboard.writeText(`${text}\n— ${source}\n${url}`).then(() => showToast('Tautan bagikan disalin!', 'success'));
   }
 }
 
@@ -178,7 +219,7 @@ if (randomBtn) {
   });
 }
 
-// ==================== FETCH & INFINITE SCROLL ====================
+// ==================== SKELETON & FETCH ====================
 function showSkeletons(count = 6) {
   grid.innerHTML = '';
   for (let i=0; i<count; i++) {
