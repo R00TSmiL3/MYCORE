@@ -11,6 +11,31 @@
   --success: #2ecc71;
   --radius: 14px;
   --transition: 0.25s ease;
+  --border: #333;
+  --shadow: rgba(0,0,0,0.6);
+  --header-bg: transparent;
+  --body-bg: radial-gradient(ellipse at top, #1a1a1a 0%, #0d0d0d 70%);
+  --card-shadow: 0 20px 40px rgba(0,0,0,0.6);
+  --skeleton-color: #2c2c2c;
+}
+
+/* ==================== Light Mode ==================== */
+body.light-mode {
+  --bg: #faf8f5;
+  --surface: #ffffff;
+  --surface2: #f0ebe3;
+  --text: #2c2416;
+  --text-muted: #6b5e4a;
+  --gold: #b8860b;
+  --gold-hover: #9e7209;
+  --danger: #c0392b;
+  --success: #2ecc71;
+  --border: #d9cdb3;
+  --shadow: rgba(0,0,0,0.08);
+  --header-bg: rgba(250,248,245,0.8);
+  --body-bg: linear-gradient(135deg, #f0ebe3 0%, #faf8f5 50%, #f0ebe3 100%);
+  --card-shadow: 0 16px 32px rgba(0,0,0,0.08);
+  --skeleton-color: #e0d7c6;
 }
 
 /* ==================== Reset & Base ==================== */
@@ -23,11 +48,176 @@
 }
 
 body {
-  font-family: 'Georgia', 'Times New Roman', serif;
-  background: var(--bg);
+  background: var(--body-bg);
+  background-attachment: fixed;
   color: var(--text);
+  font-family: 'Georgia', 'Times New Roman', serif;
   min-height: 100vh;
   line-height: 1.7;
+  transition: background 0.5s ease, color 0.5s ease;
+}
+
+/* ==================== Lilin Pojok Kiri Atas ==================== */
+.candle-wrapper {
+  position: relative;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 70px;
+  padding: 0;
+  margin-right: 1rem;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#themeToggle {
+  display: none;
+}
+
+.candle-stick {
+  width: 28px;
+  height: 50px;
+  background: #444;
+  border-radius: 4px;
+  position: relative;
+  border-bottom: 3px solid var(--danger);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+  transition: background 0.5s ease;
+  display: flex;
+  justify-content: center;
+}
+
+body.light-mode .candle-stick {
+  background: #eae6da;
+}
+
+.wick {
+  width: 2px;
+  height: 8px;
+  background: #111;
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.flame {
+  position: absolute;
+  top: -22px;
+  left: 50%;
+  transform: translateX(-50%) scale(0);
+  width: 12px;
+  height: 28px;
+  background: radial-gradient(circle at bottom, #fff, var(--gold) 40%, #ff8c00 80%, transparent 100%);
+  border-radius: 50% 50% 20% 20% / 60% 60% 40% 40%;
+  opacity: 0;
+  z-index: 3;
+  transition: all 0.3s ease;
+}
+
+body.light-mode .flame {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+  animation: fire-dance 0.2s infinite alternate;
+}
+
+@keyframes fire-dance {
+  0% { transform: translateX(-50%) scale(1) rotate(-1deg); }
+  100% { transform: translateX(-50%) scale(1.02) rotate(1deg); }
+}
+
+.blown-out {
+  animation: die-fire 0.6s ease-out forwards !important;
+}
+
+@keyframes die-fire {
+  0% { transform: translateX(-50%) scale(1); opacity: 1; }
+  40% { transform: translateX(-30px) rotate(-45deg) scale(0.5); opacity: 0.8; }
+  100% { transform: translateX(-50px) rotate(-60deg) scale(0); opacity: 0; }
+}
+
+.smoke {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  width: 2px;
+  background: rgba(200,200,200,0.3);
+  filter: blur(4px);
+  opacity: 0;
+}
+
+.smoke-anim {
+  animation: smoke-rise 3s ease-out forwards;
+}
+
+@keyframes smoke-rise {
+  0% { height: 0; opacity: 0.8; transform: translateX(-50%) translateY(0); }
+  100% { height: 60px; opacity: 0; transform: translateX(20px) translateY(-40px) scale(5); }
+}
+
+.face {
+  position: absolute;
+  top: 12px;
+  left: 0;
+  width: 100%;
+  height: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.eyes {
+  display: flex;
+  justify-content: space-between;
+  width: 14px;
+  margin-bottom: 4px;
+}
+
+.eye {
+  width: 3px;
+  height: 3px;
+  background: var(--gold);
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+body.light-mode .eye {
+  animation: blink 4s infinite linear;
+}
+
+.mouth {
+  width: 5px;
+  height: 2px;
+  background: var(--gold);
+  border-radius: 10px;
+  transition: all 0.3s ease;
+}
+
+body.light-mode .mouth {
+  width: 6px;
+  height: 2px;
+  border-radius: 0 0 10px 10px;
+}
+
+.blowing .mouth {
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 50% !important;
+  animation: uff-face 0.6s ease-out;
+}
+
+@keyframes uff-face {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.5) translateX(-2px); }
+  100% { transform: scale(1); }
+}
+
+.sleeping .eye {
+  height: 1px;
+  border-radius: 0;
+  margin-top: 2px;
 }
 
 /* ==================== Sticky Header ==================== */
@@ -35,10 +225,12 @@ body {
   position: sticky;
   top: 0;
   z-index: 90;
-  background: rgba(11, 11, 11, 0.9);
+  background: var(--header-bg);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid #222;
+  -webkit-backdrop-filter: blur(10px);
   padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.5s ease;
 }
 
 .header-inner {
@@ -55,11 +247,12 @@ body {
   font-size: 1.8rem;
   color: var(--gold);
   letter-spacing: 1px;
-  text-shadow: 0 0 15px rgba(212, 175, 55, 0.3);
+  text-shadow: 0 0 18px rgba(212, 175, 55, 0.5);
+  transition: color 0.5s ease, text-shadow 0.5s ease;
 }
 
 .subtitle {
-  color: #7a7a7a;
+  color: var(--text-muted);
   font-style: italic;
   font-size: 0.85rem;
 }
@@ -83,18 +276,19 @@ body {
   top: 50%;
   transform: translateY(-50%);
   pointer-events: none;
+  color: var(--text-muted);
 }
 
 #searchInput {
   width: 100%;
   padding: 0.7rem 1rem 0.7rem 2.4rem;
   background: var(--surface2);
-  border: 1px solid #333;
+  border: 1px solid var(--border);
   border-radius: 25px;
   color: var(--text);
   font-family: inherit;
   outline: none;
-  transition: border var(--transition);
+  transition: border var(--transition), background 0.5s ease, color 0.5s ease;
 }
 
 #searchInput:focus {
@@ -103,39 +297,54 @@ body {
 
 .sort-select,
 .btn-filter,
-.btn-random {
+.btn-random,
+.btn-bookmarks {
   padding: 0.6rem 1rem;
   background: var(--surface2);
-  border: 1px solid #333;
+  border: 1px solid var(--border);
   border-radius: 25px;
   color: var(--text);
   font-family: inherit;
   cursor: pointer;
-  transition: all var(--transition);
+  transition: all var(--transition), background 0.5s ease;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .sort-select:hover,
 .btn-filter:hover,
-.btn-random:hover {
+.btn-random:hover,
+.btn-bookmarks:hover {
   border-color: var(--gold);
   color: var(--gold);
 }
 
-.btn-random {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
+.btn-bookmarks.active {
+  background: var(--gold);
+  color: #121212;
+  border-color: var(--gold);
 }
 
-/* ==================== Filter Panel (Desktop) ==================== */
+.badge {
+  background: var(--danger);
+  color: white;
+  border-radius: 12px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: bold;
+  margin-left: 0.2rem;
+}
+
+/* ==================== Filter Panel ==================== */
 .filter-panel {
   max-width: 1200px;
   margin: 0.8rem auto 0;
   display: none;
   gap: 1rem;
   flex-wrap: wrap;
-  border-top: 1px dashed #222;
+  border-top: 1px dashed var(--border);
   padding-top: 0.8rem;
   animation: slideDown 0.3s ease;
 }
@@ -161,7 +370,7 @@ body {
   width: 100%;
   padding: 0.5rem 0.8rem;
   background: var(--surface2);
-  border: 1px solid #333;
+  border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text);
   font-family: inherit;
@@ -173,46 +382,31 @@ body {
   border-color: var(--gold);
 }
 
-/* ==================== Filter Mobile (sidebar) ==================== */
+/* mobile */
 @media (max-width: 768px) {
   .filter-panel {
-    position: fixed;
-    top: 0;
-    left: -100%;
-    width: 80%;
-    height: 100vh;
-    background: var(--surface);
-    z-index: 200;
-    transition: left 0.3s ease;
-    padding: 2rem;
-    flex-direction: column;
-    overflow-y: auto;
-    border-top: none;
-    margin: 0;
-    border-right: 1px solid #333;
+    position: static;
+    width: auto;
+    height: auto;
+    background: none;
+    padding: 0.8rem 0;
+    margin: 0 1rem;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-top: 1px dashed var(--border);
+    scrollbar-width: thin;
   }
-
-  .filter-panel.visible {
-    left: 0;
+  .filter-group {
+    min-width: 140px;
+    flex: 0 0 auto;
   }
-
   .filter-overlay {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 199;
-  }
-
-  .filter-overlay.active {
-    display: block;
+    display: none !important;
   }
 }
 
-/* ==================== Active Filters (Chips) ==================== */
+/* ==================== Active Filters ==================== */
 .active-filters {
   max-width: 1200px;
   margin: 0.6rem auto 0;
@@ -223,7 +417,7 @@ body {
 
 .chip {
   background: var(--surface2);
-  border: 1px solid #444;
+  border: 1px solid var(--border);
   border-radius: 20px;
   padding: 0.3rem 0.8rem;
   font-size: 0.8rem;
@@ -237,7 +431,7 @@ body {
 .chip button {
   background: none;
   border: none;
-  color: #aaa;
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 1rem;
   line-height: 1;
@@ -259,7 +453,7 @@ body {
 
 .stat-badge {
   background: var(--surface);
-  border: 1px solid #222;
+  border: 1px solid var(--border);
   border-radius: 20px;
   padding: 0.3rem 0.8rem;
   font-size: 0.8rem;
@@ -284,7 +478,7 @@ body {
   padding: 0 1.5rem 3rem;
 }
 
-/* ==================== Card Grid ==================== */
+/* ==================== Card ==================== */
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -293,7 +487,7 @@ body {
 
 .card {
   background: var(--surface);
-  border: 1px solid #222;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1.5rem;
   transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s;
@@ -302,6 +496,7 @@ body {
   flex-direction: column;
   position: relative;
   overflow: hidden;
+  color: var(--text);
 }
 
 .card::before {
@@ -321,8 +516,8 @@ body {
 }
 
 .card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  transform: translateY(-6px);
+  box-shadow: var(--card-shadow);
   border-color: var(--gold);
 }
 
@@ -335,17 +530,9 @@ body {
   align-self: flex-start;
 }
 
-.type-puisi {
-  color: #b28b5e;
-}
-
-.type-quote {
-  color: #c0a080;
-}
-
-.type-psikologi {
-  color: #a67f5a;
-}
+.type-puisi { color: #b28b5e; }
+.type-quote { color: #c0a080; }
+.type-psikologi { color: #a67f5a; }
 
 .content {
   font-style: italic;
@@ -355,6 +542,7 @@ body {
   white-space: pre-wrap;
   word-wrap: break-word;
   font-size: 1rem;
+  color: var(--text);
 }
 
 .card-footer {
@@ -363,14 +551,14 @@ body {
   align-items: center;
   margin-top: auto;
   font-size: 0.8rem;
-  color: #7a7a7a;
-  border-top: 1px solid #222;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
   padding-top: 0.8rem;
 }
 
 .source {
   font-weight: bold;
-  color: #bda27a;
+  color: var(--gold);
 }
 
 .tags {
@@ -380,15 +568,15 @@ body {
 }
 
 .tag {
-  background: #1e1e1e;
+  background: var(--surface2);
   padding: 0.2rem 0.6rem;
   border-radius: 10px;
   font-size: 0.7rem;
-  color: #9a8c7a;
-  border: 1px solid #2c2c2c;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
 }
 
-/* ==================== Actions (like, bookmark, copy, share) ==================== */
+/* ==================== Actions ==================== */
 .actions {
   display: flex;
   gap: 0.5rem;
@@ -403,7 +591,7 @@ body {
 .copy-btn,
 .share-btn {
   background: transparent;
-  border: 1px solid #333;
+  border: 1px solid var(--border);
   border-radius: 20px;
   padding: 0.3rem 0.7rem;
   color: var(--text-muted);
@@ -449,7 +637,7 @@ body {
   background: rgba(212, 175, 55, 0.1);
 }
 
-/* ==================== Toast Notification ==================== */
+/* ==================== Toast ==================== */
 .toast {
   position: fixed;
   bottom: 24px;
@@ -461,25 +649,18 @@ body {
   color: var(--text);
   z-index: 9999;
   animation: slideInToast 0.3s ease, fadeOutToast 0.3s 2.7s ease forwards;
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.6);
   font-size: 0.9rem;
 }
 
-.toast-success {
-  border-color: var(--success);
-}
+.toast-success { border-color: var(--success); }
+.toast-error { border-color: var(--danger); }
+.toast-info { border-color: var(--gold); }
 
-.toast-error {
-  border-color: var(--danger);
-}
-
-.toast-info {
-  border-color: var(--gold);
-}
-
-/* ==================== Skeleton Loader ==================== */
+/* ==================== Skeleton ==================== */
 .skeleton-card {
   background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1.5rem;
   animation: pulse 1.5s infinite;
@@ -491,41 +672,30 @@ body {
 .skeleton-badge {
   width: 60px;
   height: 12px;
-  background: #2c2c2c;
+  background: var(--skeleton-color);
   border-radius: 4px;
 }
 
 .skeleton-line {
   height: 14px;
-  background: #2c2c2c;
+  background: var(--skeleton-color);
   border-radius: 4px;
   width: 100%;
 }
 
-.skeleton-line.short {
-  width: 60%;
-}
+.skeleton-line.short { width: 60%; }
+.skeleton-footer { display: flex; justify-content: space-between; }
 
-.skeleton-footer {
-  display: flex;
-  justify-content: space-between;
-}
-
-/* ==================== Empty State & Loader ==================== */
+/* ==================== Empty & Loader ==================== */
 .empty-state {
   text-align: center;
   padding: 4rem 1rem;
+  color: var(--text);
 }
 
-.empty-icon {
-  font-size: 4rem;
-  margin-bottom: 1rem;
-}
-
-.empty-state h3 {
-  color: var(--gold);
-  margin-bottom: 0.5rem;
-}
+.empty-icon { font-size: 4rem; margin-bottom: 1rem; }
+.empty-state h3 { color: var(--gold); margin-bottom: 0.5rem; }
+.empty-state p { color: var(--text-muted); }
 
 .loader {
   text-align: center;
@@ -540,37 +710,16 @@ body {
 .loader-spinner {
   width: 36px;
   height: 36px;
-  border: 3px solid #333;
+  border: 3px solid var(--border);
   border-top-color: var(--gold);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
 
 /* ==================== Keyframes ==================== */
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes slideDown {
-  from { opacity: 0; max-height: 0; }
-  to { opacity: 1; max-height: 200px; }
-}
-
-@keyframes slideInToast {
-  from { opacity: 0; transform: translateX(60px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
-@keyframes fadeOutToast {
-  to { opacity: 0; transform: translateY(10px); }
-}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideDown { from { opacity: 0; max-height: 0; } to { opacity: 1; max-height: 200px; } }
+@keyframes slideInToast { from { opacity: 0; transform: translateX(60px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes fadeOutToast { to { opacity: 0; transform: translateY(10px); } }

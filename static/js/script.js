@@ -366,3 +366,51 @@ function populateSortSelect() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+
+
+// ==================== DARK / LIGHT MODE (LILIN) ====================
+const themeToggle = document.getElementById('themeToggle');
+const flame = document.getElementById('flame');
+const smoke = document.getElementById('smoke');
+const face = document.getElementById('face');
+const body = document.body;
+
+// Cek preferensi di localStorage
+const savedTheme = localStorage.getItem('theme');
+if (savedTheme === 'light') {
+  body.classList.add('light-mode');
+  themeToggle.checked = true;
+  // face sudah dalam mode terang (mata terbuka) -> animasi blink
+  // api menyala
+  flame.style.opacity = '1';
+  flame.style.transform = 'translateX(-50%) scale(1)';
+}
+
+themeToggle.addEventListener('change', () => {
+  if (themeToggle.checked) {
+    // MENYALAKAN LILIN (Light Mode)
+    body.classList.add('light-mode');
+    flame.classList.remove('blown-out');
+    face.classList.remove('blowing', 'sleeping');
+    smoke.classList.remove('smoke-anim');
+    localStorage.setItem('theme', 'light');
+  } else {
+    // MEMATIKAN LILIN (Dark Mode) + animasi
+    body.classList.remove('light-mode');
+    face.classList.add('blowing');
+    flame.classList.add('blown-out');
+    localStorage.setItem('theme', 'dark');
+
+    setTimeout(() => {
+      smoke.classList.add('smoke-anim');
+    }, 200);
+
+    setTimeout(() => {
+      face.classList.remove('blowing');
+      face.classList.add('sleeping');
+      flame.classList.remove('blown-out');
+      flame.style.opacity = '0'; // pastikan api mati
+      flame.style.transform = 'translateX(-50%) scale(0)';
+    }, 600);
+  }
+});

@@ -300,6 +300,34 @@ def like_entry(entry_id):
         return jsonify({'error': 'Kesalahan server'}), 500
     finally:
         conn.close()
+        
+@app.route('/api/entries/<int:entry_id>/like', methods=['DELETE'])
+@csrf.exempt
+@limiter.limit("30 per minute")
+def unlike_entry(entry_id):
+    data = request.get_json(silent=True) or {}
+    visitor_id = data.get('visitor_id', '').strip()
+    if not visitor_id or len(visitor_id) < 8:
+        return jsonify({'error': 'visitor_id tidak valid'}), 400
+    conn = get_db()
+    try:
+        existing = conn.execute(
+            "SELECT id FROM likes WHERE entry_id = ? AND visitor_id = ?",
+            (entry_id, visitor_id)).fetchone()
+        if not existing:
+            return jsonify({'error': 'Anda belum menyukai entri ini'}), 404
+        conn.execute("DELETE FROM likes WHERE id = ?", (existing['id'],))
+        conn.execute("UPDATE entries SET like_count = like_count - 1 WHERE id = ? AND like_count > 0",
+                     (entry_id,))
+        conn.commit()
+        new_count = conn.execute("SELECT like_count FROM entries WHERE id = ?",
+                                 (entry_id,)).fetchone()['like_count']
+        return jsonify({'success': True, 'like_count': new_count})
+    except Exception as e:
+        app.logger.error(f"Unlike error: {e}")
+        return jsonify({'error': 'Kesalahan server'}), 500
+    finally:
+        conn.close()
 
 @app.route('/api/stats')
 def api_stats():
