@@ -5,28 +5,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🕯️ Arsip Rasa</title>
     <link rel="stylesheet" href="/static/css/style.css">
-    <style>
-        /* Font elegan untuk judul (opsional, bisa tetap Georgia) */
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;1,300&family=Noto+Serif+SC:wght@200;400&display=swap');
-    </style>
 </head>
-<body>
+<body class="light-mode">
     <header class="sticky-header">
         <div class="header-inner">
-            <!-- Lilin pojok kiri atas -->
+            <!-- Lilin Toggle Dark/Light -->
             <label class="candle-wrapper" id="candleWrapper">
-                <input type="checkbox" id="themeToggle">
-                <div class="flame" id="flame"></div>
-                <div class="candle-stick" id="stick">
-                    <div class="wick"></div>
-                    <div class="smoke" id="smoke"></div>
-                    <div class="face" id="face">
-                        <div class="eyes">
-                            <div class="eye"></div>
-                            <div class="eye"></div>
+                <input type="checkbox" id="themeToggle" checked>
+                <div class="wrapper" id="lilinWrapper">
+                    <div class="candles">
+                        <div class="light__wave"></div>
+                        <div class="candle1">
+                            <div class="candle1__body">
+                                <div class="candle1__eyes">
+                                    <span class="candle1__eyes-one"></span>
+                                    <span class="candle1__eyes-two"></span>
+                                </div>
+                                <div class="candle1__mouth"></div>
+                            </div>
+                            <div class="candle1__stick"></div>
                         </div>
-                        <div class="mouth"></div>
+                        <div class="candle2">
+                            <div class="candle2__body">
+                                <div class="candle2__eyes">
+                                    <div class="candle2__eyes-one"></div>
+                                    <div class="candle2__eyes-two"></div>
+                                </div>
+                            </div>
+                            <div class="candle2__stick"></div>
+                        </div>
+                        <div class="candle2__fire"></div>
+                        <div class="candle__smoke-one"></div>
+                        <div class="candle__smoke-two"></div>
                     </div>
+                    <div class="floor"></div>
                 </div>
             </label>
 
@@ -66,7 +78,6 @@
             <div class="filter-group"><label for="sourceInput">Sumber</label><input type="text" id="sourceInput" placeholder="Nama penulis/sumber..."></div>
             <div class="filter-group"><label for="tagInput">Tag</label><input type="text" id="tagInput" placeholder="Misal: rindu, trauma..."></div>
         </div>
-        <div class="filter-overlay"></div>
         <div id="activeFilters" class="active-filters"></div>
     </header>
 

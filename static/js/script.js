@@ -7,6 +7,7 @@ const BATCH_SIZE  = 15;
 // ==================== STATE ====================
 let currentType = '', currentSource = '', currentTag = '', currentSearch = '', currentSort = 'newest';
 let currentPage = 1, currentTotal = 0, isLoadingMore = false;
+let bookmarkMode = false;
 
 // ==================== VISITOR ID ====================
 function generateVisitorId() {
@@ -16,12 +17,40 @@ function generateVisitorId() {
     return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
   });
 }
-
 let visitorId = localStorage.getItem('visitor_id');
 if (!visitorId || visitorId.length < 8) {
   visitorId = generateVisitorId();
   localStorage.setItem('visitor_id', visitorId);
 }
+
+// ==================== DARK/LIGHT MODE (LILIN) ====================
+const themeToggle = document.getElementById('themeToggle');
+const lilinWrapper = document.getElementById('lilinWrapper');
+const body = document.body;
+
+// Cek preferensi di localStorage
+const savedTheme = localStorage.getItem('theme');
+if (savedTheme === 'dark') {
+    body.classList.remove('light-mode');
+    lilinWrapper.classList.add('dark');
+    themeToggle.checked = false;
+} else {
+    body.classList.add('light-mode');
+    lilinWrapper.classList.remove('dark');
+    themeToggle.checked = true;
+}
+
+themeToggle.addEventListener('change', () => {
+    if (themeToggle.checked) {
+        body.classList.add('light-mode');
+        lilinWrapper.classList.remove('dark');
+        localStorage.setItem('theme', 'light');
+    } else {
+        body.classList.remove('light-mode');
+        lilinWrapper.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
+    }
+});
 
 // ==================== DOM ELEMENTS ====================
 const grid = document.getElementById('cardGrid');
@@ -38,6 +67,8 @@ const activeFiltersDiv = document.getElementById('activeFilters');
 const statsContainer = document.getElementById('statsContainer');
 const clearFiltersBtn = document.getElementById('clearFiltersBtn');
 const randomBtn = document.getElementById('randomBtn');
+const bookmarkBtn = document.getElementById('bookmarkBtn');
+const bookmarkBadge = document.getElementById('bookmarkBadge');
 
 // ==================== UTILS ====================
 function escapeHtml(str) {
@@ -66,6 +97,14 @@ function saveBookmarks(list) {
   localStorage.setItem('bookmarks', JSON.stringify(list));
 }
 
+function updateBookmarkBadge() {
+  const count = getBookmarks().length;
+  if (bookmarkBadge) {
+    bookmarkBadge.textContent = count;
+    bookmarkBadge.style.display = count > 0 ? 'inline' : 'none';
+  }
+}
+
 // ==================== RENDER ====================
 function renderCards(entries) {
   const bookmarks = getBookmarks();
@@ -76,16 +115,14 @@ function renderCards(entries) {
     const isLiked = e.user_liked;
     const isBookmarked = bookmarks.includes(e.id);
 
-    // Tombol like
     const likeHtml = `
-      <button class="like-btn ${isLiked ? 'liked' : ''}" data-entry-id="${e.id}" ${isLiked ? 'disabled' : ''}>
+      <button class="like-btn ${isLiked ? 'liked' : ''}" data-entry-id="${e.id}">
         <svg viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
           <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
         </svg>
         <span class="like-count">${e.like_count}</span>
       </button>`;
 
-    // Tombol bookmark
     const bookmarkHtml = `
       <button class="bookmark-btn ${isBookmarked ? 'bookmarked' : ''}" data-entry-id="${e.id}">
         <svg viewBox="0 0 24 24" fill="${isBookmarked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
@@ -93,7 +130,6 @@ function renderCards(entries) {
         </svg>
       </button>`;
 
-    // Tombol copy
     const copyHtml = `
       <button class="copy-btn" data-text="${escapeHtml(e.content)}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -102,15 +138,11 @@ function renderCards(entries) {
         </svg>
       </button>`;
 
-    // Tombol share
     const shareHtml = `
       <button class="share-btn" data-text="${escapeHtml(e.content)}" data-source="${escapeHtml(e.source)}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="18" cy="5" r="3"/>
-          <circle cx="6" cy="12" r="3"/>
-          <circle cx="18" cy="19" r="3"/>
-          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+          <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
         </svg>
       </button>`;
 
@@ -128,8 +160,7 @@ function renderCards(entries) {
         ${shareHtml}
       </div>`;
 
-    // Event listeners
-    card.querySelector('.like-btn').addEventListener('click', handleLike);
+    card.querySelector('.like-btn').addEventListener('click', toggleLike);
     card.querySelector('.bookmark-btn').addEventListener('click', toggleBookmark);
     card.querySelector('.copy-btn').addEventListener('click', copyText);
     card.querySelector('.share-btn').addEventListener('click', shareEntry);
@@ -137,31 +168,36 @@ function renderCards(entries) {
   });
 }
 
-// ==================== LIKE ====================
-async function handleLike(e) {
+// ==================== LIKE (Toggle) ====================
+async function toggleLike(e) {
   const btn = e.currentTarget;
-  if (btn.disabled) return;
+  const entryId = btn.dataset.entryId;
+  const isLiked = btn.classList.contains('liked');
   btn.disabled = true;
+  const method = isLiked ? 'DELETE' : 'POST';
   try {
-    const res = await fetch(`/api/entries/${btn.dataset.entryId}/like`, {
-      method: 'POST',
+    const res = await fetch(`/api/entries/${entryId}/like`, {
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ visitor_id: visitorId })
     });
     const data = await res.json();
     if (res.ok) {
-      btn.querySelector('svg').setAttribute('fill', 'currentColor');
+      if (isLiked) {
+        btn.classList.remove('liked');
+        btn.querySelector('svg').setAttribute('fill', 'none');
+      } else {
+        btn.classList.add('liked');
+        btn.querySelector('svg').setAttribute('fill', 'currentColor');
+      }
       btn.querySelector('.like-count').textContent = data.like_count;
-      btn.classList.add('liked');
-      btn.disabled = true;
     } else {
-      showToast(data.error || 'Gagal menyukai', 'error');
-      btn.disabled = false;
+      showToast(data.error || 'Gagal', 'error');
     }
   } catch {
     showToast('Tidak dapat terhubung ke server', 'error');
-    btn.disabled = false;
   }
+  btn.disabled = false;
 }
 
 // ==================== BOOKMARK ====================
@@ -181,9 +217,10 @@ function toggleBookmark(e) {
     showToast('Ditambahkan ke bookmark', 'success');
   }
   saveBookmarks(bookmarks);
+  updateBookmarkBadge();
+  if (bookmarkMode) loadBookmarkEntries();
 }
 
-// ==================== COPY & SHARE ====================
 function copyText(e) {
   const text = e.currentTarget.dataset.text;
   navigator.clipboard.writeText(text).then(() => showToast('Teks disalin!', 'success'));
@@ -194,32 +231,58 @@ function shareEntry(e) {
   const text = btn.dataset.text;
   const source = btn.dataset.source;
   const url = window.location.href.split('?')[0];
-  const shareData = { title: 'Arsip Rasa', text: `"${text}"\n— ${source}\n`, url };
   if (navigator.share) {
-    navigator.share(shareData).catch(() => {});
+    navigator.share({ title: 'Arsip Rasa', text: `"${text}"\n— ${source}\n`, url }).catch(() => {});
   } else {
     navigator.clipboard.writeText(`${text}\n— ${source}\n${url}`).then(() => showToast('Tautan bagikan disalin!', 'success'));
   }
 }
 
-// ==================== RANDOM QUOTE ====================
-if (randomBtn) {
-  randomBtn.addEventListener('click', async () => {
-    try {
-      const res = await fetch(API_RANDOM);
-      if (res.ok) {
-        const entry = await res.json();
-        grid.innerHTML = '';
-        renderCards([entry]);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      } else {
-        showToast('Gagal mengambil kutipan acak', 'error');
-      }
-    } catch { showToast('Gagal terhubung', 'error'); }
-  });
+// ==================== RANDOM & BOOKMARK MODE ====================
+randomBtn?.addEventListener('click', async () => {
+  try {
+    const res = await fetch(API_RANDOM);
+    if (res.ok) {
+      const entry = await res.json();
+      grid.innerHTML = '';
+      renderCards([entry]);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      showToast('Gagal mengambil kutipan acak', 'error');
+    }
+  } catch { showToast('Gagal terhubung', 'error'); }
+});
+
+async function loadBookmarkEntries() {
+  const bookmarks = getBookmarks();
+  if (bookmarks.length === 0) {
+    grid.innerHTML = '';
+    emptyState.style.display = 'block';
+    emptyState.querySelector('h3').textContent = 'Belum ada bookmark';
+    return;
+  }
+  const params = new URLSearchParams({ ids: bookmarks.join(','), visitor_id: visitorId });
+  try {
+    const res = await fetch(`${API_ENTRIES}?${params}`);
+    const data = await res.json();
+    grid.innerHTML = '';
+    renderCards(data.entries);
+    emptyState.style.display = 'none';
+  } catch { showToast('Gagal memuat bookmark', 'error'); }
 }
 
-// ==================== SKELETON & FETCH ====================
+bookmarkBtn?.addEventListener('click', () => {
+  bookmarkMode = !bookmarkMode;
+  if (bookmarkMode) {
+    bookmarkBtn.classList.add('active');
+    loadBookmarkEntries();
+  } else {
+    bookmarkBtn.classList.remove('active');
+    fetchEntries(true);
+  }
+});
+
+// ==================== FETCH & INFINITE SCROLL ====================
 function showSkeletons(count = 6) {
   grid.innerHTML = '';
   for (let i=0; i<count; i++) {
@@ -231,6 +294,7 @@ function showSkeletons(count = 6) {
 }
 
 async function fetchEntries(reset = false) {
+  if (bookmarkMode) return;
   if (reset) {
     currentPage = 1;
     grid.innerHTML = '';
@@ -262,7 +326,7 @@ async function fetchEntries(reset = false) {
 }
 
 window.addEventListener('scroll', () => {
-  if (isLoadingMore || currentPage * BATCH_SIZE >= currentTotal) return;
+  if (bookmarkMode || isLoadingMore || currentPage * BATCH_SIZE >= currentTotal) return;
   if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 300) {
     isLoadingMore = true;
     currentPage++;
@@ -278,6 +342,10 @@ function updateFilters() {
   currentTag = tagInput.value.trim();
   currentSort = sortSelect.value;
   renderActiveChips();
+  if (bookmarkMode) {
+    bookmarkMode = false;
+    bookmarkBtn.classList.remove('active');
+  }
   fetchEntries(true);
 }
 
@@ -289,16 +357,9 @@ sourceInput?.addEventListener('input', debounce(updateFilters, 400));
 tagInput?.addEventListener('input', debounce(updateFilters, 400));
 sortSelect?.addEventListener('change', updateFilters);
 
-filterToggle?.addEventListener('click', () => {
-  filterPanel.classList.toggle('visible');
-  document.querySelector('.filter-overlay')?.classList.toggle('active');
-});
+filterToggle?.addEventListener('click', () => filterPanel.classList.toggle('visible'));
 clearFiltersBtn?.addEventListener('click', () => {
-  searchInput.value = '';
-  typeSelect.value = '';
-  sourceInput.value = '';
-  tagInput.value = '';
-  sortSelect.value = 'newest';
+  searchInput.value = ''; typeSelect.value = ''; sourceInput.value = ''; tagInput.value = ''; sortSelect.value = 'newest';
   updateFilters();
   filterPanel.classList.remove('visible');
 });
@@ -346,6 +407,7 @@ async function loadStatsAndTypes() {
 
 function init() {
   populateSortSelect();
+  updateBookmarkBadge();
   showSkeletons();
   loadStatsAndTypes();
   fetchEntries(true);
@@ -366,51 +428,3 @@ function populateSortSelect() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
-
-
-// ==================== DARK / LIGHT MODE (LILIN) ====================
-const themeToggle = document.getElementById('themeToggle');
-const flame = document.getElementById('flame');
-const smoke = document.getElementById('smoke');
-const face = document.getElementById('face');
-const body = document.body;
-
-// Cek preferensi di localStorage
-const savedTheme = localStorage.getItem('theme');
-if (savedTheme === 'light') {
-  body.classList.add('light-mode');
-  themeToggle.checked = true;
-  // face sudah dalam mode terang (mata terbuka) -> animasi blink
-  // api menyala
-  flame.style.opacity = '1';
-  flame.style.transform = 'translateX(-50%) scale(1)';
-}
-
-themeToggle.addEventListener('change', () => {
-  if (themeToggle.checked) {
-    // MENYALAKAN LILIN (Light Mode)
-    body.classList.add('light-mode');
-    flame.classList.remove('blown-out');
-    face.classList.remove('blowing', 'sleeping');
-    smoke.classList.remove('smoke-anim');
-    localStorage.setItem('theme', 'light');
-  } else {
-    // MEMATIKAN LILIN (Dark Mode) + animasi
-    body.classList.remove('light-mode');
-    face.classList.add('blowing');
-    flame.classList.add('blown-out');
-    localStorage.setItem('theme', 'dark');
-
-    setTimeout(() => {
-      smoke.classList.add('smoke-anim');
-    }, 200);
-
-    setTimeout(() => {
-      face.classList.remove('blowing');
-      face.classList.add('sleeping');
-      flame.classList.remove('blown-out');
-      flame.style.opacity = '0'; // pastikan api mati
-      flame.style.transform = 'translateX(-50%) scale(0)';
-    }, 600);
-  }
-});
