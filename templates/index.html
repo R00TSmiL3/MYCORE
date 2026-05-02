@@ -6,16 +6,50 @@
     <title>🕯️ Arsip Rasa</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
-<body>
+<body class="light-mode">
     <header class="sticky-header">
         <div class="header-inner">
+            <!-- Lilin Toggle Dark/Light -->
+            <label class="candle-wrapper" id="candleWrapper">
+                <input type="checkbox" id="themeToggle" checked>
+                <div class="wrapper" id="lilinWrapper">
+                    <div class="candles">
+                        <div class="light__wave"></div>
+                        <div class="candle1">
+                            <div class="candle1__body">
+                                <div class="candle1__eyes">
+                                    <span class="candle1__eyes-one"></span>
+                                    <span class="candle1__eyes-two"></span>
+                                </div>
+                                <div class="candle1__mouth"></div>
+                            </div>
+                            <div class="candle1__stick"></div>
+                        </div>
+                        <div class="candle2">
+                            <div class="candle2__body">
+                                <div class="candle2__eyes">
+                                    <div class="candle2__eyes-one"></div>
+                                    <div class="candle2__eyes-two"></div>
+                                </div>
+                            </div>
+                            <div class="candle2__stick"></div>
+                        </div>
+                        <div class="candle2__fire"></div>
+                        <div class="candle__smoke-one"></div>
+                        <div class="candle__smoke-two"></div>
+                    </div>
+                    <div class="floor"></div>
+                </div>
+            </label>
+
             <div class="logo-area">
                 <h1>🕯️ Arsip Rasa</h1>
                 <p class="subtitle">Koleksi puisi, petikan, dan renungan</p>
             </div>
+
             <div class="search-area">
                 <div class="search-wrapper">
-                    <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" stroke="#9a8c7a" fill="none" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                    <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                     <input type="text" id="searchInput" placeholder="Cari kata, sumber, tag..." autocomplete="off" aria-label="Cari konten">
                 </div>
                 <select id="sortSelect" class="sort-select" aria-label="Urutkan"></select>
@@ -31,6 +65,12 @@
                     </svg>
                     Acak
                 </button>
+                <button id="bookmarkBtn" class="btn-bookmarks" title="Bookmark">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <span id="bookmarkBadge" class="badge" style="display:none;">0</span>
+                </button>
             </div>
         </div>
         <div id="filterPanel" class="filter-panel" aria-hidden="true">
@@ -38,7 +78,6 @@
             <div class="filter-group"><label for="sourceInput">Sumber</label><input type="text" id="sourceInput" placeholder="Nama penulis/sumber..."></div>
             <div class="filter-group"><label for="tagInput">Tag</label><input type="text" id="tagInput" placeholder="Misal: rindu, trauma..."></div>
         </div>
-        <div class="filter-overlay"></div>
         <div id="activeFilters" class="active-filters"></div>
     </header>
 
