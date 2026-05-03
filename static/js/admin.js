@@ -1,528 +1,448 @@
-/* ==================== Variabel Tema ==================== */
-:root {
-  --bg: #0b0b0b;
-  --surface: #141414;
-  --surface2: #1e1e1e;
-  --text: #e0d7c6;
-  --text-muted: #9a8c7a;
-  --gold: #d4af37;
-  --gold-hover: #e0c35e;
-  --danger: #c0392b;
-  --success: #2ecc71;
-  --radius: 14px;
-  --transition: 0.25s ease;
+// admin.js – SPA Admin Panel with CSRF, XSS prevention, confirm modal, moderation, full CRUD
+const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+
+function apiFetch(url, options = {}) {
+  if (!options.headers) options.headers = {};
+  options.headers['X-CSRFToken'] = csrfToken;
+  return fetch(url, options);
 }
 
-/* ==================== Reset & Base ==================== */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
-body {
-  background: #0d0d0d;
-  color: var(--text);
-  font-family: 'Georgia', 'Times New Roman', serif;
-  background-image: radial-gradient(ellipse at top, #1a1a1a 0%, #0d0d0d 70%);
-  min-height: 100vh;
-  line-height: 1.7;
+const API_ENTRIES = '/api/admin/entries';
+const API_TYPES   = '/api/admin/types';
+const API_SOURCES = '/api/admin/sources';
+const API_TAGS    = '/api/admin/tags';
+const API_STATS   = '/api/admin/stats';
+
+let currentPage = 'dashboard';
+let entriesPage = 1, entriesTotal = 0;
+let entrySearch = '', entryFilterType = '', entrySort = 'newest';
+let moderateStatus = 'pending';
+
+// Navigation
+document.querySelectorAll('.nav-link').forEach(link => {
+  link.addEventListener('click', e => {
+    e.preventDefault();
+    switchPage(link.dataset.page);
+  });
+});
+
+function switchPage(page) {
+  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+  document.querySelector(`.nav-link[data-page="${page}"]`).classList.add('active');
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(`page-${page}`).classList.add('active');
+  currentPage = page;
+  if (page === 'dashboard') loadDashboard();
+  else if (page === 'entries') loadEntries();
+  else if (page === 'moderate') loadModerate();
+  else if (page === 'types') loadTypes();
+  else if (page === 'sources') loadSources();
+  else if (page === 'tags') loadTags();
 }
 
-/* ==================== Sticky Header ==================== */
-.sticky-header {
-  position: sticky;
-  top: 0;
-  z-index: 90;
-  background: inherit;            /* mewarisi gradien dari body */
-  backdrop-filter: blur(8px);     /* opsional, efek blur lembut */
-  padding: 1rem 1.5rem;
+// Flash message
+function showFlash(msg, type='info') {
+  const div = document.createElement('div');
+  div.className = `flash-msg ${type}`;
+  div.textContent = msg;
+  document.querySelector('.main-content').prepend(div);
+  setTimeout(() => div.remove(), 4000);
 }
 
-.header-inner {
-  max-width: 1200px;
-  margin: 0 auto;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1rem;
+// Modal helpers
+function openModal(html) {
+  document.getElementById('modal-body').innerHTML = html;
+  document.getElementById('modal').classList.add('active');
+}
+function closeModal() {
+  document.getElementById('modal').classList.remove('active');
+}
+document.querySelector('.modal-close').addEventListener('click', closeModal);
+window.addEventListener('click', e => {
+  if (e.target === document.getElementById('modal')) closeModal();
+});
+
+function confirmModal(message) {
+  return new Promise(resolve => {
+    openModal(`
+      <p>${message}</p>
+      <div style="display:flex; gap:1rem; justify-content:flex-end; margin-top:1.5rem;">
+        <button class="btn btn-outline" id="modal-cancel">Batal</button>
+        <button class="btn btn-danger" id="modal-confirm">Ya</button>
+      </div>
+    `);
+    document.getElementById('modal-cancel').addEventListener('click', () => { closeModal(); resolve(false); });
+    document.getElementById('modal-confirm').addEventListener('click', () => { closeModal(); resolve(true); });
+  });
 }
 
-.logo-area h1 {
-  font-size: 1.8rem;
-  color: var(--gold);
-  letter-spacing: 1px;
-  text-shadow: 0 0 18px rgba(212, 175, 55, 0.5);   /* lebih terang & lembut */
-}
+// ========== DASHBOARD ==========
+async function loadDashboard() {
+  try {
+    const statsRes = await apiFetch(API_STATS);
+    const stats = await statsRes.json();
+    document.getElementById('stat-entries').textContent = stats.total_entries;
+    document.getElementById('stat-types').textContent = stats.total_types;
+    document.getElementById('stat-likes').textContent = stats.total_likes;
 
-.subtitle {
-  color: #7a7a7a;
-  font-style: italic;
-  font-size: 0.85rem;
-}
-
-/* ==================== area search ==================== */
-.search-area {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.search-wrapper {
-  position: relative;
-  flex: 1;
-  min-width: 200px;
-}
-
-.search-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
-}
-
-#searchInput {
-  width: 100%;
-  padding: 0.7rem 1rem 0.7rem 2.4rem;
-  background: var(--surface2);
-  border: 1px solid #333;
-  border-radius: 25px;
-  color: var(--text);
-  font-family: inherit;
-  outline: none;
-  transition: border var(--transition);
-}
-
-#searchInput:focus {
-  border-color: var(--gold);
-}
-
-.sort-select,
-.btn-filter,
-.btn-random,
-.btn-bookmarks {
-  padding: 0.6rem 1rem;
-  background: var(--surface2);
-  border: 1px solid #333;
-  border-radius: 25px;
-  color: var(--text);
-  font-family: inherit;
-  cursor: pointer;
-  transition: all var(--transition);
-  white-space: nowrap;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.sort-select:hover,
-.btn-filter:hover,
-.btn-random:hover,
-.btn-bookmarks:hover {
-  border-color: var(--gold);
-  color: var(--gold);
-}
-
-.btn-bookmarks.active {
-  background: var(--gold);
-  color: #121212;
-  border-color: var(--gold);
-}
-
-.badge {
-  background: var(--danger);
-  color: white;
-  border-radius: 12px;
-  padding: 0.1rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: bold;
-  margin-left: 0.2rem;
-}
-
-/* ==================== Filter Panel ==================== */
-.filter-panel {
-  max-width: 1200px;
-  margin: 0.8rem auto 0;
-  display: none;
-  gap: 1rem;
-  flex-wrap: wrap;
-  border-top: 1px dashed #222;
-  padding-top: 0.8rem;
-  animation: slideDown 0.3s ease;
-}
-
-.filter-panel.visible {
-  display: flex;
-}
-
-.filter-group {
-  flex: 1;
-  min-width: 160px;
-}
-
-.filter-group label {
-  display: block;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  margin-bottom: 4px;
-}
-
-.filter-group input,
-.filter-group select {
-  width: 100%;
-  padding: 0.5rem 0.8rem;
-  background: var(--surface2);
-  border: 1px solid #333;
-  border-radius: 6px;
-  color: var(--text);
-  font-family: inherit;
-  outline: none;
-}
-
-.filter-group input:focus,
-.filter-group select:focus {
-  border-color: var(--gold);
-}
-
-/* mobile */
-@media (max-width: 768px) {
-  .filter-panel {
-    position: static;
-    width: auto;
-    height: auto;
-    background: none;
-    padding: 0.8rem 0;
-    margin: 0 1rem;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    border-top: 1px dashed #333;
-    scrollbar-width: thin;
-  }
-  .filter-group {
-    min-width: 140px;
-    flex: 0 0 auto;
-  }
-  .filter-overlay {
-    display: none !important;
+    const entriesRes = await apiFetch(`${API_ENTRIES}?per_page=5&sort=newest`);
+    const data = await entriesRes.json();
+    let html = '';
+    if (data.entries.length) {
+      html = `<table><thead><tr><th>ID</th><th>User</th><th>Tipe</th><th>Konten</th><th>Status</th></tr></thead><tbody>
+        ${data.entries.map(e => `
+          <tr>
+            <td>${e.id}</td>
+            <td>${escapeHtml(e.username)}</td>
+            <td>${e.type_name}</td>
+            <td>${escapeHtml(e.content.substring(0,60))}…</td>
+            <td>${e.status}</td>
+          </tr>`).join('')}
+      </tbody></table>`;
+    } else {
+      html = '<p>Belum ada entri.</p>';
+    }
+    document.getElementById('recent-entries').innerHTML = html;
+  } catch (err) {
+    console.error(err);
+    showFlash('Gagal memuat dashboard.', 'error');
   }
 }
 
-/* ==================== Active Filters ==================== */
-.active-filters {
-  max-width: 1200px;
-  margin: 0.6rem auto 0;
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+// ========== ENTRIES (Admin CRUD) ==========
+async function loadEntries() {
+  entrySearch = document.getElementById('entry-search').value.trim();
+  entryFilterType = document.getElementById('entry-type-filter').value;
+  entrySort = document.getElementById('entry-sort').value;
+  const params = new URLSearchParams({ page: entriesPage, per_page: 20, sort: entrySort, search: entrySearch, type: entryFilterType });
+  try {
+    const res = await apiFetch(`${API_ENTRIES}?${params}`);
+    const data = await res.json();
+    entriesTotal = data.total;
+    let html = '';
+    if (data.entries.length) {
+      html = `<table><thead><tr><th>ID</th><th>User</th><th>Tipe</th><th>Konten</th><th>Status</th><th>Likes</th><th>Aksi</th></tr></thead><tbody>
+        ${data.entries.map(e => `
+          <tr>
+            <td>${e.id}</td>
+            <td>${escapeHtml(e.username)}</td>
+            <td>${e.type_name}</td>
+            <td>${escapeHtml(e.content.substring(0,60))}…</td>
+            <td>${e.status}</td>
+            <td>${e.like_count}</td>
+            <td>
+              <button class="btn btn-sm edit-entry" data-id="${e.id}">Edit</button>
+              <button class="btn btn-sm btn-danger delete-entry" data-id="${e.id}">Hapus</button>
+            </td>
+          </tr>`).join('')}
+      </tbody></table>`;
+    } else {
+      html = '<p>Tidak ada entri.</p>';
+    }
+    document.getElementById('entries-table').innerHTML = html;
+    renderEntriesPagination();
+    attachEntryEvents();
+  } catch (err) {
+    console.error(err);
+    showFlash('Gagal memuat entri.', 'error');
+  }
 }
 
-.chip {
-  background: var(--surface2);
-  border: 1px solid #444;
-  border-radius: 20px;
-  padding: 0.3rem 0.8rem;
-  font-size: 0.8rem;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--gold);
-  animation: fadeIn 0.2s ease;
+function renderEntriesPagination() {
+  const totalPages = Math.ceil(entriesTotal / 20);
+  let html = '';
+  if (entriesPage > 1) html += `<a href="#" data-page="${entriesPage-1}">←</a>`;
+  html += `<span>Hal ${entriesPage} / ${totalPages}</span>`;
+  if (entriesPage < totalPages) html += `<a href="#" data-page="${entriesPage+1}">→</a>`;
+  document.getElementById('entries-pagination').innerHTML = html;
+  document.querySelectorAll('#entries-pagination a').forEach(a => {
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      entriesPage = parseInt(a.dataset.page);
+      loadEntries();
+    });
+  });
 }
 
-.chip button {
-  background: none;
-  border: none;
-  color: #aaa;
-  cursor: pointer;
-  font-size: 1rem;
-  line-height: 1;
-  padding: 0;
+function attachEntryEvents() {
+  document.querySelectorAll('.edit-entry').forEach(btn => {
+    btn.addEventListener('click', () => showEntryModal(btn.dataset.id));
+  });
+  document.querySelectorAll('.delete-entry').forEach(btn => {
+    btn.addEventListener('click', () => deleteEntry(btn.dataset.id));
+  });
 }
 
-.chip button:hover {
-  color: var(--danger);
+async function showEntryModal(id = null) {
+  const typesRes = await apiFetch(API_TYPES);
+  const types = await typesRes.json();
+  let entry = { type_id: '', content: '', source: '', tags: '' };
+  if (id) {
+    const res = await apiFetch(`${API_ENTRIES}/${id}`);
+    if (res.ok) entry = await res.json();
+    else return showFlash('Entri tidak ditemukan.', 'error');
+  }
+  openModal(`
+    <h3>${id ? 'Edit Entri' : 'Tambah Entri'}</h3>
+    <div style="display:flex;flex-direction:column;gap:1rem;margin-top:1rem;">
+      <select id="modal-type" class="form-control">${types.map(t => `<option value="${t.id}" ${t.id==entry.type_id?'selected':''}>${escapeHtml(t.name)}</option>`).join('')}</select>
+      <textarea id="modal-content" class="form-control" rows="5">${escapeHtml(entry.content)}</textarea>
+      <input type="text" id="modal-source" class="form-control" value="${escapeHtml(entry.source)}" placeholder="Sumber">
+      <input type="text" id="modal-tags" class="form-control" value="${escapeHtml(entry.tags)}" placeholder="Tag (pisahkan koma)">
+      <button class="btn" id="save-entry">Simpan</button>
+    </div>
+  `);
+  document.getElementById('save-entry').addEventListener('click', async () => {
+    const data = {
+      type_id: document.getElementById('modal-type').value,
+      content: document.getElementById('modal-content').value,
+      source: document.getElementById('modal-source').value,
+      tags: document.getElementById('modal-tags').value
+    };
+    const method = id ? 'PUT' : 'POST';
+    const url = id ? `${API_ENTRIES}/${id}` : API_ENTRIES;
+    const res = await apiFetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (res.ok) {
+      closeModal();
+      loadEntries();
+      showFlash(id ? 'Entri diperbarui.' : 'Entri ditambahkan.', 'success');
+    } else {
+      const err = await res.json();
+      showFlash(err.error || 'Gagal menyimpan.', 'error');
+    }
+  });
 }
 
-/* ==================== Stats Bar ==================== */
-.stats-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 1.5rem 0;
-  justify-content: center;
+async function deleteEntry(id) {
+  if (!(await confirmModal('Hapus entri ini?'))) return;
+  const res = await apiFetch(`${API_ENTRIES}/${id}`, { method: 'DELETE' });
+  if (res.ok) {
+    loadEntries();
+    showFlash('Entri dihapus.', 'info');
+  }
 }
 
-.stat-badge {
-  background: var(--surface);
-  border: 1px solid #222;
-  border-radius: 20px;
-  padding: 0.3rem 0.8rem;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: all var(--transition);
-  color: var(--text-muted);
+// ========== MODERASI ==========
+async function loadModerate() {
+  moderateStatus = document.getElementById('moderate-status').value;
+  const res = await apiFetch(`${API_ENTRIES}?status=${moderateStatus}`);
+  const data = await res.json();
+  let html = '';
+  if (data.entries.length) {
+    html = `<table><thead><tr><th>ID</th><th>User</th><th>Tipe</th><th>Konten</th><th>Status</th><th>Aksi</th></tr></thead><tbody>
+      ${data.entries.map(e => `
+        <tr>
+          <td>${e.id}</td>
+          <td>${escapeHtml(e.username)}</td>
+          <td>${e.type_name}</td>
+          <td>${escapeHtml(e.content.substring(0,50))}…</td>
+          <td>${e.status}</td>
+          <td>
+            <button class="btn btn-sm detail-moderate" data-id="${e.id}">Detail</button>
+            ${e.status === 'pending' ? `
+              <button class="btn btn-sm approve-moderate" data-id="${e.id}">Approve</button>
+              <button class="btn btn-sm btn-danger reject-moderate" data-id="${e.id}">Reject</button>
+            ` : ''}
+          </td>
+        </tr>`).join('')}
+    </tbody></table>`;
+  } else {
+    html = '<p>Tidak ada entri dengan status ini.</p>';
+  }
+  document.getElementById('moderate-table').innerHTML = html;
+  attachModerateEvents();
 }
 
-.stat-badge:hover {
-  border-color: var(--gold);
-  color: var(--gold);
+function attachModerateEvents() {
+  document.querySelectorAll('.detail-moderate').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      const res = await apiFetch(`${API_ENTRIES}?page=1&per_page=1&search=${id}`);
+      const data = await res.json();
+      const entry = data.entries.find(e => e.id == id);
+      if (!entry) return showFlash('Entri tidak ditemukan.', 'error');
+      openModal(`
+        <h3>Detail Entri #${entry.id}</h3>
+        <p><strong>User:</strong> ${escapeHtml(entry.username)}</p>
+        <p><strong>Tipe:</strong> ${entry.type_name}</p>
+        <p><strong>Status:</strong> ${entry.status}</p>
+        <div style="background:var(--surface2);padding:1rem;border-radius:8px;margin:1rem 0;">${escapeHtml(entry.content)}</div>
+        ${entry.rejection_reason ? `<p><strong>Alasan Reject:</strong> ${escapeHtml(entry.rejection_reason)}</p>` : ''}
+        ${entry.status === 'pending' ? `
+          <div style="display:flex; gap:0.5rem; margin-top:1rem;">
+            <button class="btn approve-moderate" data-id="${entry.id}">Approve</button>
+            <button class="btn btn-danger reject-moderate" data-id="${entry.id}">Reject</button>
+          </div>
+        ` : ''}
+      `);
+      document.querySelectorAll('.approve-moderate').forEach(b => b.addEventListener('click', () => reviewEntry(b.dataset.id, 'passed')));
+      document.querySelectorAll('.reject-moderate').forEach(b => b.addEventListener('click', () => {
+        const reason = prompt('Alasan penolakan:');
+        if (reason !== null) reviewEntry(b.dataset.id, 'rejected', reason);
+      }));
+    });
+  });
+
+  document.querySelectorAll('.approve-moderate').forEach(btn => {
+    btn.addEventListener('click', () => reviewEntry(btn.dataset.id, 'passed'));
+  });
+  document.querySelectorAll('.reject-moderate').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const reason = prompt('Alasan penolakan:');
+      if (reason !== null) reviewEntry(btn.dataset.id, 'rejected', reason);
+    });
+  });
 }
 
-.stat-badge strong {
-  color: var(--gold);
+async function reviewEntry(id, action, reason = '') {
+  const res = await apiFetch(`${API_ENTRIES}/${id}/review`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, reason })
+  });
+  if (res.ok) {
+    showFlash(`Entri berhasil ${action === 'passed' ? 'disetujui' : 'ditolak'}.`, 'success');
+    loadModerate();
+  } else {
+    const err = await res.json();
+    showFlash(err.error || 'Gagal memproses.', 'error');
+  }
 }
 
-/* ==================== Main Container ==================== */
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 1.5rem 3rem;
+// ========== TYPES ==========
+async function loadTypes() {
+  const sort = document.getElementById('type-sort').value;
+  const res = await apiFetch(`${API_TYPES}?sort=${sort}`);
+  const types = await res.json();
+  let html = '';
+  if (types.length) {
+    html = `<table><thead><tr><th>ID</th><th>Nama</th><th>Jumlah</th><th>Aksi</th></tr></thead><tbody>
+      ${types.map(t => `
+        <tr>
+          <td>${t.id}</td>
+          <td>${escapeHtml(t.name)}</td>
+          <td>${t.count}</td>
+          <td>
+            <button class="btn btn-sm edit-type" data-id="${t.id}" data-name="${escapeHtml(t.name)}">Edit</button>
+            <button class="btn btn-sm btn-danger delete-type" data-id="${t.id}">Hapus</button>
+          </td>
+        </tr>`).join('')}
+    </tbody></table>`;
+  } else {
+    html = '<p>Belum ada tipe.</p>';
+  }
+  document.getElementById('types-table').innerHTML = html;
+  document.querySelectorAll('.edit-type').forEach(btn => {
+    btn.addEventListener('click', () => showTypeModal(btn.dataset.id, btn.dataset.name));
+  });
+  document.querySelectorAll('.delete-type').forEach(btn => {
+    btn.addEventListener('click', () => deleteType(btn.dataset.id));
+  });
 }
 
-/* ==================== Card ==================== */
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1.5rem;
+function showTypeModal(id = null, name = '') {
+  openModal(`
+    <h3>${id ? 'Edit Tipe' : 'Tambah Tipe'}</h3>
+    <div style="display:flex;flex-direction:column;gap:1rem;margin-top:1rem;">
+      <input type="text" id="modal-type-name" class="form-control" value="${escapeHtml(name)}" placeholder="Nama tipe">
+      <button class="btn" id="save-type">Simpan</button>
+    </div>
+  `);
+  document.getElementById('save-type').addEventListener('click', async () => {
+    const newName = document.getElementById('modal-type-name').value.trim();
+    if (!newName) return showFlash('Nama tipe diperlukan.', 'error');
+    const method = id ? 'PUT' : 'POST';
+    const url = id ? `${API_TYPES}/${id}` : API_TYPES;
+    const res = await apiFetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName })
+    });
+    if (res.ok) {
+      closeModal();
+      loadTypes();
+      showFlash(id ? 'Tipe diperbarui.' : 'Tipe ditambahkan.', 'success');
+    } else {
+      const err = await res.json();
+      showFlash(err.error || 'Gagal menyimpan.', 'error');
+    }
+  });
 }
 
-.card {
-  background: var(--surface);
-  border: 1px solid #222;
-  border-radius: var(--radius);
-  padding: 1.5rem;
-  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s;
-  animation: fadeUp 0.4s ease-out;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  overflow: hidden;
+async function deleteType(id) {
+  if (!(await confirmModal('Hapus tipe ini? Jika masih ada entri, tidak akan bisa dihapus.'))) return;
+  const res = await apiFetch(`${API_TYPES}/${id}`, { method: 'DELETE' });
+  if (res.ok) {
+    loadTypes();
+    showFlash('Tipe dihapus.', 'info');
+  } else {
+    const err = await res.json();
+    showFlash(err.error, 'error');
+  }
 }
 
-.card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 4px;
-  height: 100%;
-  background: var(--gold);
-  transform: scaleY(0);
-  transition: transform 0.3s ease;
+// ========== SOURCES ==========
+async function loadSources() {
+  const sort = document.getElementById('source-sort').value;
+  const res = await apiFetch(`${API_SOURCES}?sort=${sort}`);
+  const sources = await res.json();
+  let html = sources.length
+    ? `<table><thead><tr><th>Sumber</th><th>Jumlah</th></tr></thead><tbody>
+        ${sources.map(s => `<tr><td>${escapeHtml(s.source)}</td><td>${s.count}</td></tr>`).join('')}
+      </tbody></table>`
+    : '<p>Tidak ada sumber.</p>';
+  document.getElementById('sources-table').innerHTML = html;
 }
 
-.card:hover::before {
-  transform: scaleY(1);
+// ========== TAGS ==========
+async function loadTags() {
+  const sort = document.getElementById('tag-sort').value;
+  const res = await apiFetch(`${API_TAGS}?sort=${sort}`);
+  const tags = await res.json();
+  let html = tags.length
+    ? `<table><thead><tr><th>Tag</th><th>Jumlah</th></tr></thead><tbody>
+        ${tags.map(t => `<tr><td>#${escapeHtml(t.tag)}</td><td>${t.count}</td></tr>`).join('')}
+      </tbody></table>`
+    : '<p>Tidak ada tag.</p>';
+  document.getElementById('tags-table').innerHTML = html;
 }
 
-.card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 20px 40px rgba(0,0,0,0.6);
-  border-color: var(--gold);
-}
+// ========== TOOLBAR EVENT LISTENERS ==========
+document.getElementById('entry-search').addEventListener('input', () => { entriesPage=1; loadEntries(); });
+document.getElementById('entry-type-filter').addEventListener('change', () => { entriesPage=1; loadEntries(); });
+document.getElementById('entry-sort').addEventListener('change', () => { entriesPage=1; loadEntries(); });
+document.getElementById('btn-add-entry').addEventListener('click', () => showEntryModal());
+document.getElementById('type-sort').addEventListener('change', loadTypes);
+document.getElementById('btn-add-type').addEventListener('click', () => showTypeModal());
+document.getElementById('source-sort').addEventListener('change', loadSources);
+document.getElementById('tag-sort').addEventListener('change', loadTags);
+document.getElementById('moderate-status').addEventListener('change', loadModerate);
+document.getElementById('btn-refresh-moderate').addEventListener('click', loadModerate);
 
-.type-badge {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  margin-bottom: 0.8rem;
-  font-weight: bold;
-  align-self: flex-start;
-}
-
-.type-puisi { color: #b28b5e; }
-.type-quote { color: #c0a080; }
-.type-psikologi { color: #a67f5a; }
-
-.content {
-  font-style: italic;
-  line-height: 1.8;
-  flex-grow: 1;
-  margin-bottom: 1rem;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  font-size: 1rem;
-  color: var(--text);
-}
-
-.card-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: auto;
-  font-size: 0.8rem;
-  color: #7a7a7a;
-  border-top: 1px solid #222;
-  padding-top: 0.8rem;
-}
-
-.source {
-  font-weight: bold;
-  color: #bda27a;
-}
-
-.tags {
-  display: flex;
-  gap: 0.3rem;
-  flex-wrap: wrap;
-}
-
-.tag {
-  background: #1e1e1e;
-  padding: 0.2rem 0.6rem;
-  border-radius: 10px;
-  font-size: 0.7rem;
-  color: #9a8c7a;
-  border: 1px solid #2c2c2c;
-}
-
-/* ==================== Actions ==================== */
-.actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.8rem;
-  justify-content: flex-end;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.like-btn,
-.bookmark-btn,
-.copy-btn,
-.share-btn {
-  background: transparent;
-  border: 1px solid #333;
-  border-radius: 20px;
-  padding: 0.3rem 0.7rem;
-  color: var(--text-muted);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  transition: color var(--transition), border-color var(--transition), background var(--transition);
-  font-family: inherit;
-  font-size: 0.8rem;
-  line-height: 1;
-}
-
-.like-btn svg,
-.bookmark-btn svg,
-.copy-btn svg,
-.share-btn svg {
-  width: 16px;
-  height: 16px;
-}
-
-.like-btn:hover,
-.bookmark-btn:hover,
-.copy-btn:hover,
-.share-btn:hover {
-  border-color: var(--gold);
-  color: var(--gold);
-}
-
-.like-btn.liked {
-  border-color: var(--danger);
-  color: var(--danger);
-  background: rgba(192, 57, 43, 0.1);
-}
-
-.like-btn.liked .like-count {
-  color: var(--danger);
-}
-
-.bookmark-btn.bookmarked {
-  border-color: var(--gold);
-  color: var(--gold);
-  background: rgba(212, 175, 55, 0.1);
-}
-
-/* ==================== Toast ==================== */
-.toast {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  background: var(--surface2);
-  border-left: 4px solid var(--gold);
-  padding: 0.7rem 1.4rem;
-  border-radius: 8px;
-  color: var(--text);
-  z-index: 9999;
-  animation: slideInToast 0.3s ease, fadeOutToast 0.3s 2.7s ease forwards;
-  box-shadow: 0 8px 16px rgba(0,0,0,0.6);
-  font-size: 0.9rem;
-}
-
-.toast-success { border-color: var(--success); }
-.toast-error { border-color: var(--danger); }
-.toast-info { border-color: var(--gold); }
-
-/* ==================== Skeleton ==================== */
-.skeleton-card {
-  background: var(--surface);
-  border-radius: var(--radius);
-  padding: 1.5rem;
-  animation: pulse 1.5s infinite;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.skeleton-badge {
-  width: 60px;
-  height: 12px;
-  background: #2c2c2c;
-  border-radius: 4px;
-}
-
-.skeleton-line {
-  height: 14px;
-  background: #2c2c2c;
-  border-radius: 4px;
-  width: 100%;
-}
-
-.skeleton-line.short { width: 60%; }
-.skeleton-footer { display: flex; justify-content: space-between; }
-
-/* ==================== Empty & Loader ==================== */
-.empty-state {
-  text-align: center;
-  padding: 4rem 1rem;
-}
-
-.empty-icon { font-size: 4rem; margin-bottom: 1rem; }
-.empty-state h3 { color: var(--gold); margin-bottom: 0.5rem; }
-
-.loader {
-  text-align: center;
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.8rem;
-  color: var(--text-muted);
-}
-
-.loader-spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid #333;
-  border-top-color: var(--gold);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-/* ==================== Keyframes ==================== */
-@keyframes spin { to { transform: rotate(360deg); } }
-@keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes slideDown { from { opacity: 0; max-height: 0; } to { opacity: 1; max-height: 200px; } }
-@keyframes slideInToast { from { opacity: 0; transform: translateX(60px); } to { opacity: 1; transform: translateX(0); } }
-@keyframes fadeOutToast { to { opacity: 0; transform: translateY(10px); } }
+// ========== INITIALIZATION ==========
+(async function init() {
+  try {
+    const res = await apiFetch(API_TYPES);
+    const types = await res.json();
+    const select = document.getElementById('entry-type-filter');
+    if (select) {
+      select.innerHTML = '<option value="">Semua Tipe</option>';
+      types.forEach(t => { select.innerHTML += `<option value="${t.id}">${escapeHtml(t.name)} (${t.count})</option>`; });
+    }
+  } catch(err) { console.error(err); }
+  switchPage('dashboard');
+})();

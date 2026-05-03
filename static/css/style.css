@@ -103,7 +103,6 @@ body {
   z-index: 1;
 }
 
-/* Candle 1 */
 .candle1 {
   position: absolute;
   left: 50%;
@@ -166,7 +165,6 @@ body {
   animation: uff 3s infinite linear;
 }
 
-/* Candle 2 */
 .candle2 {
   position: absolute;
   left: 20%; top: 65%;
@@ -233,24 +231,21 @@ body {
   animation: move-top 3s infinite linear;
 }
 
-/* Dark mode tidak menghentikan animasi, hanya mengubah visual */
+/* Dark mode overrides for candle */
 .wrapper.dark .candle2__fire {
   opacity: 0;
 }
-
 .wrapper.dark .candle1__eyes-one,
 .wrapper.dark .candle1__eyes-two {
   height: 2px;
   border-radius: 0;
   margin-top: 2px;
 }
-
 .wrapper.dark .candle1__mouth {
   width: 5px; height: 2px;
   border-radius: 0;
   background: #673C63;
 }
-
 .wrapper.dark .candle2__eyes-one,
 .wrapper.dark .candle2__eyes-two {
   height: 2px;
@@ -259,7 +254,7 @@ body {
   background: #673C63;
 }
 
-/* Keyframes (persis dari kode lilin) */
+/* Keyframes lilin */
 @keyframes blink-eyes {
   0%,35% { opacity: 1; transform: translate(-70%, 0%); }
   36%,39% { opacity: 0; transform: translate(-70%, 0%); }
@@ -372,10 +367,10 @@ body {
   color: var(--text-muted);
   font-style: italic;
   font-size: 0.85rem;
-  transition: color 0.6s ease;
 }
 
-.search-area {
+.search-area,
+.user-area {
   display: flex;
   gap: 0.5rem;
   align-items: center;
