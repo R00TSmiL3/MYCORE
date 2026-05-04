@@ -9,6 +9,24 @@ let currentType = '', currentSource = '', currentTag = '', currentSearch = '', c
 let currentPage = 1, currentTotal = 0, isLoadingMore = false;
 let bookmarkMode = false;
 
+// ==================== CSRF TOKEN ====================
+function getCsrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.content : '';
+}
+
+async function apiFetch(url, options = {}) {
+    // Hanya tambahkan token untuk method yang mengubah state
+    if (!options.method || ['POST', 'PUT', 'DELETE', 'PATCH'].includes(options.method.toUpperCase())) {
+        const token = getCsrfToken();
+        if (token) {
+            options.headers = options.headers || {};
+            options.headers['X-CSRFToken'] = token;
+        }
+    }
+    return fetch(url, options);
+}
+
 // ==================== VISITOR ID ====================
 function generateVisitorId() {
   if (crypto.randomUUID) return crypto.randomUUID();
@@ -28,7 +46,6 @@ const themeToggle = document.getElementById('themeToggle');
 const lilinWrapper = document.getElementById('lilinWrapper');
 const body = document.body;
 
-// Cek preferensi di localStorage
 const savedTheme = localStorage.getItem('theme');
 if (savedTheme === 'dark') {
     body.classList.remove('light-mode');
@@ -70,6 +87,64 @@ const randomBtn = document.getElementById('randomBtn');
 const bookmarkBtn = document.getElementById('bookmarkBtn');
 const bookmarkBadge = document.getElementById('bookmarkBadge');
 
+// Auth elements (ditambahkan)
+let loginLink = null;
+let logoutLink = null;
+let displayUsername = null;
+let btnUpload = null;
+
+function createAuthElements() {
+  // Buat elemen dinamis jika tidak ada di HTML
+  if (!document.getElementById('authArea')) {
+    const authArea = document.createElement('div');
+    authArea.id = 'authArea';
+    authArea.style.display = 'flex';
+    authArea.style.alignItems = 'center';
+    authArea.style.gap = '0.5rem';
+    // tempatkan di dalam search-area atau di sampingnya
+    const searchArea = document.querySelector('.search-area');
+    if (searchArea) {
+      searchArea.appendChild(authArea);
+    } else {
+      document.querySelector('.header-inner')?.appendChild(authArea);
+    }
+
+    loginLink = document.createElement('a');
+    loginLink.href = '/logreg';
+    loginLink.className = 'btn-random';
+    loginLink.textContent = 'Masuk';
+    loginLink.id = 'loginLink';
+
+    logoutLink = document.createElement('a');
+    logoutLink.href = '#';
+    logoutLink.className = 'btn-random';
+    logoutLink.textContent = 'Keluar';
+    logoutLink.id = 'logoutLink';
+    logoutLink.style.display = 'none';
+
+    displayUsername = document.createElement('span');
+    displayUsername.id = 'display-username';
+    displayUsername.style.color = 'var(--gold)';
+    displayUsername.style.display = 'none';
+
+    btnUpload = document.createElement('button');
+    btnUpload.className = 'btn-random';
+    btnUpload.textContent = '+ Upload';
+    btnUpload.id = 'btn-upload';
+    btnUpload.style.display = 'none';
+
+    authArea.appendChild(loginLink);
+    authArea.appendChild(displayUsername);
+    authArea.appendChild(btnUpload);
+    authArea.appendChild(logoutLink);
+  } else {
+    loginLink = document.getElementById('loginLink');
+    logoutLink = document.getElementById('logoutLink');
+    displayUsername = document.getElementById('display-username');
+    btnUpload = document.getElementById('btn-upload');
+  }
+}
+
 // ==================== UTILS ====================
 function escapeHtml(str) {
   if (!str) return '';
@@ -92,16 +167,119 @@ function showToast(msg, type = 'info') {
 function getBookmarks() {
   return JSON.parse(localStorage.getItem('bookmarks') || '[]');
 }
-
 function saveBookmarks(list) {
   localStorage.setItem('bookmarks', JSON.stringify(list));
 }
-
 function updateBookmarkBadge() {
   const count = getBookmarks().length;
   if (bookmarkBadge) {
     bookmarkBadge.textContent = count;
     bookmarkBadge.style.display = count > 0 ? 'inline' : 'none';
+  }
+}
+
+// ==================== AUTH ====================
+async function checkLogin() {
+  try {
+    const res = await fetch('/api/me');
+    if (res.ok) {
+      const user = await res.json();
+      showLoggedIn(user);
+    } else {
+      showLoggedOut();
+    }
+  } catch { showLoggedOut(); }
+}
+
+function showLoggedIn(user) {
+  if (!loginLink) return;
+  loginLink.style.display = 'none';
+  if (displayUsername) {
+    displayUsername.style.display = 'inline';
+    displayUsername.textContent = user.username;
+  }
+  if (btnUpload) btnUpload.style.display = 'inline-flex';
+  if (logoutLink) logoutLink.style.display = 'inline-flex';
+  // tambahkan event logout
+  if (logoutLink) {
+    logoutLink.onclick = async (e) => {
+      e.preventDefault();
+      await fetch('/api/logout');
+      showLoggedOut();
+      showToast('Anda telah keluar.', 'info');
+    };
+  }
+  // event upload
+  if (btnUpload) {
+    btnUpload.onclick = () => showUploadModal();
+  }
+}
+
+function showLoggedOut() {
+  if (!loginLink) return;
+  loginLink.style.display = 'inline-flex';
+  if (displayUsername) displayUsername.style.display = 'none';
+  if (btnUpload) btnUpload.style.display = 'none';
+  if (logoutLink) logoutLink.style.display = 'none';
+}
+
+// ==================== MODAL (untuk upload) ====================
+function openModal(html) {
+  let modal = document.getElementById('modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modal';
+    modal.className = 'modal';
+    modal.innerHTML = `<div class="modal-content"><span class="modal-close">&times;</span><div id="modal-body"></div></div>`;
+    document.body.appendChild(modal);
+    modal.querySelector('.modal-close').addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+  }
+  document.getElementById('modal-body').innerHTML = html;
+  modal.classList.add('active');
+}
+function closeModal() {
+  const modal = document.getElementById('modal');
+  if (modal) modal.classList.remove('active');
+}
+
+async function showUploadModal() {
+  try {
+    const res = await fetch('/api/stats');
+    const stats = await res.json();
+    const types = stats.types;
+    const html = `
+      <h3>Upload Puisi/Quote</h3>
+      <select id="upload-type" class="form-control" style="margin-bottom:0.5rem;">${types.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}</select>
+      <textarea id="upload-content" class="form-control" rows="5" placeholder="Tulis isi..." style="margin-bottom:0.5rem;"></textarea>
+      <input type="text" id="upload-source" class="form-control" placeholder="Sumber (penulis)" style="margin-bottom:0.5rem;">
+      <input type="text" id="upload-tags" class="form-control" placeholder="Tag (pisahkan koma)" style="margin-bottom:0.5rem;">
+      <button class="btn" id="upload-submit">Kirim</button>
+    `;
+    openModal(html);
+    document.getElementById('upload-submit').addEventListener('click', async () => {
+      const data = {
+        type_id: document.getElementById('upload-type').value,
+        content: document.getElementById('upload-content').value,
+        source: document.getElementById('upload-source').value,
+        tags: document.getElementById('upload-tags').value
+      };
+      // Gunakan apiFetch dengan CSRF
+      const res = await apiFetch('/api/entries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (res.ok) {
+        closeModal();
+        showToast('Entri berhasil dikirim dan menunggu moderasi.', 'success');
+      } else {
+        const err = await res.json();
+        showToast(err.error, 'error');
+      }
+    });
+  } catch {
+    showToast('Gagal memuat daftar tipe.', 'error');
   }
 }
 
@@ -151,6 +329,7 @@ function renderCards(entries) {
       <div class="content">${escapeHtml(e.content)}</div>
       <div class="card-footer">
         <span class="source">— ${escapeHtml(e.source)}</span>
+        <span class="author" style="margin-left:auto;">👤 ${escapeHtml(e.username)}</span>
         <div class="tags">${e.tags.map(t => `<span class="tag">#${escapeHtml(t)}</span>`).join('')}</div>
       </div>
       <div class="actions">
@@ -406,11 +585,13 @@ async function loadStatsAndTypes() {
 }
 
 function init() {
+  createAuthElements();
   populateSortSelect();
   updateBookmarkBadge();
   showSkeletons();
   loadStatsAndTypes();
   fetchEntries(true);
+  checkLogin();  // cek status login
 }
 
 function populateSortSelect() {

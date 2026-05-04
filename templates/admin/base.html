@@ -90,6 +90,12 @@
             <a href="{{ url_for('admin_list_sources') }}">📚 Sumber</a>
             <a href="{{ url_for('admin_list_tags') }}">🔖 Tag</a>
         </nav>
+        <nav>
+        <a href="{{ url_for('admin.admin_index') }}">📋 Dashboard</a>
+        <a href="{{ url_for('admin.admin_index') }}#">🏷️ Tipe</a>  <!-- fallback -->
+        <a href="{{ url_for('admin.admin_index') }}#">📚 Sumber</a>
+        <a href="{{ url_for('admin.admin_index') }}#">🔖 Tag</a>
+    </nav>
         {% if current_user.is_authenticated %}
         <div class="user-info">
             👤 {{ current_user.username }}<br>

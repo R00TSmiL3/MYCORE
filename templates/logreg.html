@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Masuk / Daftar – Arsip Rasa</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: var(--body-bg);
+            font-family: 'Georgia', 'Times New Roman', serif;
+        }
+        .logreg-container {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 2.5rem 2rem;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        h1 {
+            color: var(--gold);
+            margin-bottom: 1.5rem;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+            text-align: left;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.3rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+        .form-control {
+            width: 100%;
+            padding: 0.7rem 1rem;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-family: inherit;
+            outline: none;
+            transition: border var(--transition);
+        }
+        .form-control:focus {
+            border-color: var(--gold);
+        }
+        .btn {
+            width: 100%;
+            padding: 0.7rem;
+            background: var(--gold);
+            color: #121212;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background var(--transition);
+            margin-top: 0.5rem;
+        }
+        .btn:hover {
+            background: var(--gold-hover);
+        }
+        .switch-link {
+            color: var(--gold);
+            text-decoration: none;
+            cursor: pointer;
+            margin-top: 1rem;
+            display: inline-block;
+        }
+        .switch-link:hover {
+            text-decoration: underline;
+        }
+        .flash-msg {
+            padding: 0.6rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+        .flash-msg.error {
+            background: rgba(192,57,43,0.15);
+            border-left: 4px solid var(--danger);
+            color: var(--danger);
+        }
+        .flash-msg.success {
+            background: rgba(46,204,113,0.15);
+            border-left: 4px solid var(--success);
+            color: var(--success);
+        }
+        .back-link {
+            display: block;
+            text-align: center;
+            margin-top: 1.5rem;
+            color: var(--text-muted);
+            text-decoration: none;
+        }
+        .back-link:hover {
+            color: var(--gold);
+        }
+    </style>
+</head>
+<body class="light-mode">
+    <div class="logreg-container">
+        <h1>🕯️ Arsip Rasa</h1>
+        <div id="formContainer">
+            <!-- Form akan diisi oleh JS -->
+        </div>
+        <a href="/" class="back-link">← Kembali ke beranda</a>
+    </div>
+    <script src="/static/js/logreg.js"></script>
+</body>
+</html>
