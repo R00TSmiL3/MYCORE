@@ -124,7 +124,8 @@ async function loadEntries() {
   entrySearch = document.getElementById('entry-search').value.trim();
   entryFilterType = document.getElementById('entry-type-filter').value;
   entrySort = document.getElementById('entry-sort').value;
-  const params = new URLSearchParams({ page: entriesPage, per_page: 20, sort: entrySort, search: entrySearch, type: entryFilterType });
+  const params = new URLSearchParams({ page: entriesPage, per_page: 20, sort: entrySort, search: entrySearch });
+  if (entryFilterType) params.set('type', entryFilterType);  // Kirim type filter
   try {
     const res = await apiFetch(`${API_ENTRIES}?${params}`);
     const data = await res.json();
@@ -271,15 +272,15 @@ function attachModerateEvents() {
   document.querySelectorAll('.detail-moderate').forEach(btn => {
     btn.addEventListener('click', async () => {
       const id = btn.dataset.id;
-      const res = await apiFetch(`${API_ENTRIES}?page=1&per_page=1&search=${id}`);
-      const data = await res.json();
-      const entry = data.entries.find(e => e.id == id);
-      if (!entry) return showFlash('Entri tidak ditemukan.', 'error');
+      // PERBAIKAN: Gunakan endpoint spesifik
+      const res = await apiFetch(`${API_ENTRIES}/${id}`);
+      if (!res.ok) return showFlash('Gagal memuat detail.', 'error');
+      const entry = await res.json();
       openModal(`
         <h3>Detail Entri #${entry.id}</h3>
-        <p><strong>User:</strong> ${escapeHtml(entry.username)}</p>
-        <p><strong>Tipe:</strong> ${entry.type_name}</p>
-        <p><strong>Status:</strong> ${entry.status}</p>
+        <p><strong>User:</strong> ${escapeHtml(entry.username || '')}</p>
+        <p><strong>Tipe:</strong> ${entry.type_name || ''}</p>
+        <p><strong>Status:</strong> ${entry.status || ''}</p>
         <div style="background:var(--surface2);padding:1rem;border-radius:8px;margin:1rem 0;">${escapeHtml(entry.content)}</div>
         ${entry.rejection_reason ? `<p><strong>Alasan Reject:</strong> ${escapeHtml(entry.rejection_reason)}</p>` : ''}
         ${entry.status === 'pending' ? `

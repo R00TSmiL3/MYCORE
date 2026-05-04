@@ -1,4 +1,15 @@
 // logreg.js – Handle login dan register di logreg.html
+const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+async function apiFetch(url, options = {}) {
+    if (!options.method || ['POST', 'PUT', 'DELETE'].includes(options.method.toUpperCase())) {
+        options.headers = options.headers || {};
+        options.headers['X-CSRFToken'] = csrfToken;
+    }
+    const res = await fetch(url, options);
+    return res;
+}
+
 const formContainer = document.getElementById('formContainer');
 let currentMode = 'login'; // 'login' atau 'register'
 
@@ -54,7 +65,7 @@ async function handleSubmit() {
 
     const url = currentMode === 'login' ? '/api/login' : '/api/register';
     try {
-        const res = await fetch(url, {
+        const res = await apiFetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })

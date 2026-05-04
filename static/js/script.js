@@ -9,6 +9,24 @@ let currentType = '', currentSource = '', currentTag = '', currentSearch = '', c
 let currentPage = 1, currentTotal = 0, isLoadingMore = false;
 let bookmarkMode = false;
 
+// ==================== CSRF TOKEN ====================
+function getCsrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.content : '';
+}
+
+async function apiFetch(url, options = {}) {
+    // Hanya tambahkan token untuk method yang mengubah state
+    if (!options.method || ['POST', 'PUT', 'DELETE', 'PATCH'].includes(options.method.toUpperCase())) {
+        const token = getCsrfToken();
+        if (token) {
+            options.headers = options.headers || {};
+            options.headers['X-CSRFToken'] = token;
+        }
+    }
+    return fetch(url, options);
+}
+
 // ==================== VISITOR ID ====================
 function generateVisitorId() {
   if (crypto.randomUUID) return crypto.randomUUID();
@@ -246,7 +264,8 @@ async function showUploadModal() {
         source: document.getElementById('upload-source').value,
         tags: document.getElementById('upload-tags').value
       };
-      const res = await fetch('/api/entries', {
+      // Gunakan apiFetch dengan CSRF
+      const res = await apiFetch('/api/entries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)

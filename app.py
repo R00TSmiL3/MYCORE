@@ -34,65 +34,85 @@ DATABASE = 'library.db'
 def get_db():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
+    # Aktifkan WAL mode untuk performa dan menghindari lock saat inisialisasi
+    conn.execute("PRAGMA journal_mode=WAL")
     return conn
 
 def init_db():
     conn = get_db()
-    conn.executescript('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            role TEXT NOT NULL DEFAULT 'user',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS types (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS entries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            type_id INTEGER NOT NULL,
-            content TEXT NOT NULL,
-            source TEXT DEFAULT 'Anonim',
-            tags TEXT DEFAULT '',
-            like_count INTEGER DEFAULT 0,
-            user_id INTEGER NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pending',
-            reviewed_by INTEGER,
-            rejection_reason TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (type_id) REFERENCES types (id) ON DELETE CASCADE,
-            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-            FOREIGN KEY (reviewed_by) REFERENCES users (id)
-        );
-        CREATE TABLE IF NOT EXISTS likes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            entry_id INTEGER NOT NULL,
-            visitor_id TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(entry_id, visitor_id),
-            FOREIGN KEY (entry_id) REFERENCES entries (id) ON DELETE CASCADE
-        );
-    ''')
-    # Pastikan kolom like_count ada (upgrade)
-    cols = [col[1] for col in conn.execute("PRAGMA table_info(entries)").fetchall()]
-    if 'like_count' not in cols:
-        conn.execute("ALTER TABLE entries ADD COLUMN like_count INTEGER DEFAULT 0")
-    # Tipe default
-    if conn.execute("SELECT COUNT(*) FROM types").fetchone()[0] == 0:
-        for t in ['puisi', 'quote', 'psikologi']:
-            conn.execute("INSERT INTO types (name) VALUES (?)", (t,))
-    # Admin default
-    admin_user = os.getenv('ADMIN_USERNAME', 'admin')
-    if not conn.execute("SELECT id FROM users WHERE username = ?", (admin_user,)).fetchone():
-        admin_pass = os.getenv('ADMIN_PASSWORD', 'admin123')
-        conn.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'admin')",
-                     (admin_user, generate_password_hash(admin_pass)))
-    conn.commit()
-    conn.close()
+    try:
+        conn.executescript('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'user',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS types (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                type_id INTEGER NOT NULL,
+                content TEXT NOT NULL,
+                source TEXT DEFAULT 'Anonim',
+                tags TEXT DEFAULT '',
+                like_count INTEGER DEFAULT 0,
+                user_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                reviewed_by INTEGER,
+                rejection_reason TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (type_id) REFERENCES types (id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+                FOREIGN KEY (reviewed_by) REFERENCES users (id)
+            );
+            CREATE TABLE IF NOT EXISTS likes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                entry_id INTEGER NOT NULL,
+                visitor_id TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(entry_id, visitor_id),
+                FOREIGN KEY (entry_id) REFERENCES entries (id) ON DELETE CASCADE
+            );
+        ''')
 
+        # Pastikan kolom like_count ada (upgrade)
+        cols = [col[1] for col in conn.execute("PRAGMA table_info(entries)").fetchall()]
+        if 'like_count' not in cols:
+            conn.execute("ALTER TABLE entries ADD COLUMN like_count INTEGER DEFAULT 0")
+            conn.commit()
+            
+        # Pastikan kolom role ada di tabel users (upgrade)
+        cols_users = [col[1] for col in conn.execute("PRAGMA table_info(users)").fetchall()]
+        if 'role' not in cols_users:
+             conn.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
+             conn.commit()
+            
+        # Tipe default
+        if conn.execute("SELECT COUNT(*) FROM types").fetchone()[0] == 0:
+            for t in ['puisi', 'quote', 'psikologi']:
+                conn.execute("INSERT INTO types (name) VALUES (?)", (t,))
+
+        # Admin default
+        admin_user = os.getenv('ADMIN_USERNAME', 'admin')
+        admin_pass = os.getenv('ADMIN_PASSWORD', 'admin123')
+        if admin_pass == 'admin123' or app.config['SECRET_KEY'] == 'dev-secret-change-me':
+            app.logger.warning("⚠️  Menggunakan kredensial default! Segera ubah melalui file .env")
+
+        if not conn.execute("SELECT id FROM users WHERE username = ?", (admin_user,)).fetchone():
+            conn.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'admin')",
+                         (admin_user, generate_password_hash(admin_pass)))
+            conn.commit()
+    except sqlite3.OperationalError as e:
+        app.logger.error(f"DB init error (mungkin race condition aman): {e}")
+    finally:
+        conn.close()
+
+# Inisialisasi database di dalam app context (hanya sekali)
 with app.app_context():
     init_db()
 
@@ -113,6 +133,7 @@ def is_ip_blocked(ip):
             return False
         return True
     return False
+
 def block_ip(ip, duration=10):
     blocked_ips[ip] = time.time() + duration
 
@@ -136,8 +157,8 @@ def is_safe_redirect_url(target):
 # User model
 # --------------------------------------------------------------------
 class User(UserMixin):
-    def __init__(self, id, username, role='user'):
-        self.id = id
+    def __init__(self, user_id, username, role='user'):
+        self.id = user_id
         self.username = username
         self.role = role
 
@@ -147,7 +168,9 @@ def load_user(user_id):
     row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
     conn.close()
     if row:
-        return User(row['id'], row['username'], row.get('role', 'user'))
+        # Aman untuk sqlite3.Row: periksa apakah kolom 'role' ada
+        role = row['role'] if 'role' in row.keys() else 'user'
+        return User(row['id'], row['username'], role)
     return None
 
 # --------------------------------------------------------------------
@@ -156,13 +179,16 @@ def load_user(user_id):
 @app.errorhandler(404)
 def not_found(e):
     return render_template('404.html'), 404
+
 @app.errorhandler(500)
 def server_error(e):
     return render_template('500.html'), 500
+
 @app.errorhandler(CSRFError)
 def handle_csrf_error(e):
     flash('Token keamanan tidak valid.', 'error')
     return redirect(request.referrer or url_for('index'))
+
 @app.errorhandler(403)
 def forbidden(error):
     ip = request.remote_addr
@@ -455,8 +481,8 @@ def api_me():
 # USER ENTRIES (CRUD by user)
 # ====================================================================
 @app.route('/api/entries', methods=['POST'])
-@csrf.exempt
 @login_required
+# @csrf.exempt  <-- CSRF protection diaktifkan kembali, token harus disertakan dari frontend
 def api_create_entry():
     if current_user.role not in ('user', 'admin'):
         return jsonify({'error': 'Tidak diizinkan.'}), 403
@@ -565,6 +591,7 @@ def api_admin_entries():
         return jsonify({'error': 'Forbidden'}), 403
     status = request.args.get('status', '').strip()
     search = request.args.get('search', '').strip()
+    type_id = request.args.get('type', '').strip()  # <-- PERBAIKAN: menangkap filter type
     page = max(1, request.args.get('page', 1, type=int))
     per_page = 20
     offset = (page-1)*per_page
@@ -582,6 +609,9 @@ def api_admin_entries():
     if search:
         conds.append("(e.content LIKE ? OR e.source LIKE ? OR e.tags LIKE ? OR t.name LIKE ? OR u.username LIKE ?)")
         params.extend([f"%{search}%"]*5)
+    if type_id and type_id.isdigit():
+        conds.append("e.type_id = ?")
+        params.append(int(type_id))
     where = ("WHERE " + " AND ".join(conds)) if conds else ""
     total = conn.execute(f"SELECT COUNT(*) as cnt FROM entries e JOIN types t ON e.type_id = t.id JOIN users u ON e.user_id = u.id {where}", params).fetchone()['cnt']
     entries = conn.execute(f"{base} {where} ORDER BY e.created_at DESC LIMIT ? OFFSET ?", params + [per_page, offset]).fetchall()
@@ -825,4 +855,6 @@ def api_admin_stats():
 app.register_blueprint(admin_bp)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    import os
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
