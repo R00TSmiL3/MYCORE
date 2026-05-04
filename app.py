@@ -187,8 +187,18 @@ def server_error(e):
 @app.errorhandler(CSRFError)
 def handle_csrf_error(e):
     flash('Token keamanan tidak valid.', 'error')
-    return redirect(request.referrer or url_for('index'))
-
+    referrer = (request.referrer or '').replace('\\', '/')
+    if referrer:
+        parsed = urlparse(referrer)
+        safe_path = parsed.path or ''
+        if (
+            not parsed.scheme
+            and not parsed.netloc
+            and safe_path.startswith('/')
+            and not safe_path.startswith('//')
+        ):
+            return redirect(safe_path)
+    return redirect(url_for('index'))
 @app.errorhandler(403)
 def forbidden(error):
     ip = request.remote_addr
