@@ -59,7 +59,7 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 65px;
+  width: 60px;
   height: 80px;
   cursor: pointer;
   user-select: none;
@@ -86,7 +86,7 @@ body {
   left: 50%;
   top: 50%;
   width: 350px;
-  height: 5px;
+  height: 3px;
   background: #673C63;
   transform: translate(-50%, -50%);
   box-shadow: 0px 2px 5px #111;
@@ -115,7 +115,7 @@ body {
   border-radius: 3px;
   transform-origin: center right;
   transform: translate(60%, -25%);
-  box-shadow: -2px 0 0 #95c6f2 inset;
+  box-shadow: -2px 0px 0px #95c6f2 inset;
   animation: expand-body 3s infinite linear;
 }
 
@@ -158,7 +158,7 @@ body {
 .candle1__mouth {
   position: absolute;
   left: 40%; top: 20%;
-  width: 0; height: 0;
+  width: 0px; height: 0px;
   border-radius: 20px;
   background: #673C63;
   transform: translate(-50%, -50%);
@@ -183,8 +183,11 @@ body {
   position: absolute;
   width: 5px; height: 5px;
   background: #673C63;
+  
+  float: left;
   border-radius: 100%;
   animation-duration: 3s;
+  transform: translate(-80%,0%);
   animation-iteration-count: infinite;
   animation-timing-function: linear;
 }
@@ -207,6 +210,7 @@ body {
   top: 50%; left: 40%;
   width: 16px; height: 20px;
   background: #FF9800;
+  background-color: ;
   border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
   transform: translate(-50%, -50%);
   animation: dance-fire 3s infinite linear;

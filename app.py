@@ -1,15 +1,26 @@
-import os, time, sqlite3, logging
+import os
+import time
+import sqlite3
+import logging
 from functools import wraps
-from flask import (Flask, render_template, request, redirect, url_for,
-                   flash, jsonify, Blueprint, abort)
-from flask_login import (LoginManager, UserMixin, login_user,
-                         login_required, logout_user, current_user)
+
+from flask import (
+    Flask, render_template, request, redirect, url_for,
+    flash, jsonify, Blueprint, abort, g
+)
+from flask_login import (
+    LoginManager, UserMixin, login_user,
+    login_required, logout_user, current_user
+)
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_wtf.csrf import CSRFProtect, CSRFError
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 
+# --------------------------------------------------------------------
+# Konfigurasi Awal & Ekstensi
+# --------------------------------------------------------------------
 load_dotenv()
 
 app = Flask(__name__)
@@ -20,8 +31,11 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 csrf = CSRFProtect(app)
-limiter = Limiter(key_func=get_remote_address,
-                  default_limits=["200 per day", "50 per hour"])
+
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"]
+)
 limiter.init_app(app)
 
 login_manager = LoginManager()
@@ -29,16 +43,30 @@ login_manager.login_view = 'admin.login'
 login_manager.session_protection = "strong"
 login_manager.init_app(app)
 
+# --------------------------------------------------------------------
+# Database helpers (pola per-request via Flask g)
+# --------------------------------------------------------------------
 DATABASE = 'library.db'
 
 def get_db():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    # Aktifkan WAL mode untuk performa dan menghindari lock saat inisialisasi
-    conn.execute("PRAGMA journal_mode=WAL")
-    return conn
+    """Mengembalikan koneksi DB yang sama selama satu request (disimpan di g).
+       Mengaktifkan WAL mode untuk performa baca/tulis bersamaan.
+    """
+    if 'db' not in g:
+        g.db = sqlite3.connect(DATABASE)
+        g.db.row_factory = sqlite3.Row
+        g.db.execute("PRAGMA journal_mode=WAL")
+    return g.db
+
+@app.teardown_appcontext
+def close_db(exception):
+    """Tutup koneksi database di akhir request."""
+    db = g.pop('db', None)
+    if db is not None:
+        db.close()
 
 def init_db():
+    """Inisialisasi skema database, tipe default, dan admin jika belum ada."""
     conn = get_db()
     try:
         conn.executescript('''
@@ -80,24 +108,22 @@ def init_db():
             );
         ''')
 
-        # Pastikan kolom like_count ada (upgrade)
+        # Upgrade: pastikan kolom like_count ada
         cols = [col[1] for col in conn.execute("PRAGMA table_info(entries)").fetchall()]
         if 'like_count' not in cols:
             conn.execute("ALTER TABLE entries ADD COLUMN like_count INTEGER DEFAULT 0")
-            conn.commit()
-            
-        # Pastikan kolom role ada di tabel users (upgrade)
+
+        # Upgrade: pastikan kolom role ada di users
         cols_users = [col[1] for col in conn.execute("PRAGMA table_info(users)").fetchall()]
         if 'role' not in cols_users:
-             conn.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
-             conn.commit()
-            
-        # Tipe default
+            conn.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
+
+        # Tipe bawaan jika tabel kosong
         if conn.execute("SELECT COUNT(*) FROM types").fetchone()[0] == 0:
             for t in ['puisi', 'quote', 'psikologi']:
                 conn.execute("INSERT INTO types (name) VALUES (?)", (t,))
 
-        # Admin default
+        # Akun admin default (dengan peringatan jika masih kredensial standar)
         admin_user = os.getenv('ADMIN_USERNAME', 'admin')
         admin_pass = os.getenv('ADMIN_PASSWORD', 'admin123')
         if admin_pass == 'admin123' or app.config['SECRET_KEY'] == 'dev-secret-change-me':
@@ -109,15 +135,14 @@ def init_db():
             conn.commit()
     except sqlite3.OperationalError as e:
         app.logger.error(f"DB init error (mungkin race condition aman): {e}")
-    finally:
-        conn.close()
+    # Koneksi akan ditutup otomatis oleh teardown_appcontext
 
-# Inisialisasi database di dalam app context (hanya sekali)
+# Jalankan inisialisasi DB dalam app context
 with app.app_context():
     init_db()
 
 # --------------------------------------------------------------------
-# Security utilities
+# Keamanan: Pemblokiran IP sementara & Logging
 # --------------------------------------------------------------------
 forbidden_logger = logging.getLogger('forbidden')
 forbidden_logger.setLevel(logging.INFO)
@@ -125,8 +150,11 @@ fh = logging.FileHandler('access_denied.log')
 fh.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
 forbidden_logger.addHandler(fh)
 
+# Penyimpanan sementara IP yang diblokir (dictionary di memori)
 blocked_ips = {}
+
 def is_ip_blocked(ip):
+    """Cek apakah IP saat ini diblokir, hapus jika masa blokir habis."""
     if ip in blocked_ips:
         if time.time() > blocked_ips[ip]:
             del blocked_ips[ip]
@@ -135,14 +163,17 @@ def is_ip_blocked(ip):
     return False
 
 def block_ip(ip, duration=10):
+    """Blokir IP selama 'duration' detik."""
     blocked_ips[ip] = time.time() + duration
 
 @app.before_request
 def check_block():
+    """Tolak request jika IP terblokir."""
     if is_ip_blocked(request.remote_addr):
         abort(403)
 
 def is_safe_redirect_url(target):
+    """Validasi URL redirect agar aman dari open redirect."""
     if not target:
         return False
     if '://' in target:
@@ -154,7 +185,7 @@ def is_safe_redirect_url(target):
     return True
 
 # --------------------------------------------------------------------
-# User model
+# Model User untuk Flask-Login
 # --------------------------------------------------------------------
 class User(UserMixin):
     def __init__(self, user_id, username, role='user'):
@@ -166,15 +197,14 @@ class User(UserMixin):
 def load_user(user_id):
     conn = get_db()
     row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-    conn.close()
     if row:
-        # Aman untuk sqlite3.Row: periksa apakah kolom 'role' ada
+        # Backward-compatible: jika kolom 'role' belum ada, fallback ke 'user'
         role = row['role'] if 'role' in row.keys() else 'user'
         return User(row['id'], row['username'], role)
     return None
 
 # --------------------------------------------------------------------
-# Error handlers
+# Error Handlers
 # --------------------------------------------------------------------
 @app.errorhandler(404)
 def not_found(e):
@@ -199,24 +229,26 @@ def forbidden(error):
     return render_template('403.html'), 403
 
 # --------------------------------------------------------------------
-# Helpers
+# Helper kecil
 # --------------------------------------------------------------------
 def get_types_list():
+    """Ambil semua tipe terurut berdasarkan nama."""
     conn = get_db()
     types = conn.execute("SELECT * FROM types ORDER BY name").fetchall()
-    conn.close()
     return [{'id': t['id'], 'name': t['name']} for t in types]
 
 def parse_tags(tags_str):
+    """Pecah string tag (dipisah koma) jadi list lowercase unik."""
     if not tags_str:
         return []
     return sorted(list(set(t.strip().lower() for t in tags_str.split(',') if t.strip())))
 
 def allowed_length(value, max_len=5000):
+    """Cek panjang konten tidak melebihi batas."""
     return len(value) <= max_len
 
 # ====================================================================
-# PUBLIC ROUTES
+# ROUTE PUBLIK
 # ====================================================================
 @app.route('/')
 def index():
@@ -226,8 +258,14 @@ def index():
 def logreg():
     return render_template('logreg.html')
 
+# --------------------------------------------------------------------
+# API Publik: Entri & Statistik
+# --------------------------------------------------------------------
 @app.route('/api/entries')
 def api_entries():
+    """Endpoint publik untuk menampilkan entri yang sudah disetujui.
+       Dukung pencarian, filter, paginasi, dan status like pengunjung.
+    """
     search = request.args.get('search', '').strip()
     type_id = request.args.get('type', '').strip()
     source = request.args.get('source', '').strip()
@@ -238,35 +276,46 @@ def api_entries():
     offset = (page - 1) * per_page
     visitor_id = request.args.get('visitor_id', '').strip()
 
+    # Bangun query dasar dengan join & pengecekan like + total
     conn = get_db()
-    base = ("SELECT e.*, t.name as type_name, u.username "
-            "FROM entries e "
-            "JOIN types t ON e.type_id = t.id "
-            "JOIN users u ON e.user_id = u.id")
-    conds = ["e.status = 'passed'"]
+    where_parts = ["e.status = 'passed'"]
     params = []
+
+    # Filter opsional
     if type_id and type_id.isdigit():
-        conds.append("e.type_id = ?")
+        where_parts.append("e.type_id = ?")
         params.append(int(type_id))
     if search:
-        conds.append("(e.content LIKE ? OR e.source LIKE ? OR e.tags LIKE ? OR t.name LIKE ? OR u.username LIKE ?)")
-        params.extend([f"%{search}%"]*5)
+        where_parts.append("(e.content LIKE ? OR e.source LIKE ? OR e.tags LIKE ? OR t.name LIKE ? OR u.username LIKE ?)")
+        params.extend([f"%{search}%"] * 5)
     if source:
-        conds.append("e.source LIKE ?")
+        where_parts.append("e.source LIKE ?")
         params.append(f"%{source}%")
     if tag:
-        conds.append("e.tags LIKE ?")
+        where_parts.append("e.tags LIKE ?")
         params.append(f"%{tag}%")
+
+    # Filter berdasarkan daftar ID tertentu
     ids_param = request.args.get('ids', '').strip()
     if ids_param:
         ids = [int(i) for i in ids_param.split(',') if i.isdigit()]
         if ids:
-            placeholders = ','.join('?' * len(ids))
-            conds.append(f"e.id IN ({placeholders})")
+            where_parts.append(f"e.id IN ({','.join('?' * len(ids))})")
             params.extend(ids)
 
-    where = "WHERE " + " AND ".join(conds) if conds else ""
+    where_clause = "WHERE " + " AND ".join(where_parts)
 
+    # Penanganan like & total: gunakan LEFT JOIN dengan visitor_id & window function
+    if visitor_id:
+        like_select = "(l.visitor_id IS NOT NULL) AS user_liked"
+        like_join = "LEFT JOIN likes l ON e.id = l.entry_id AND l.visitor_id = ?"
+        like_params = [visitor_id]
+    else:
+        like_select = "0 AS user_liked"
+        like_join = ""
+        like_params = []
+
+    # Urutan
     order_map = {
         'newest': 'e.created_at DESC',
         'oldest': 'e.created_at ASC',
@@ -277,22 +326,26 @@ def api_entries():
     }
     order = order_map.get(sort, 'e.created_at DESC')
 
-    query = f"{base} {where} ORDER BY {order} LIMIT ? OFFSET ?"
-    entries = conn.execute(query, params + [per_page, offset]).fetchall()
-    total = conn.execute(f"SELECT COUNT(*) as cnt FROM entries e JOIN types t ON e.type_id = t.id JOIN users u ON e.user_id = u.id {where}", params).fetchone()['cnt']
+    # Query final: COUNT(*) OVER() untuk total tanpa query terpisah
+    query = f"""
+        SELECT e.*, t.name AS type_name, u.username,
+               {like_select},
+               COUNT(*) OVER() AS total
+        FROM entries e
+        JOIN types t ON e.type_id = t.id
+        JOIN users u ON e.user_id = u.id
+        {like_join}
+        {where_clause}
+        ORDER BY {order}
+        LIMIT ? OFFSET ?
+    """
+    all_params = like_params + params + [per_page, offset]
+    entries = conn.execute(query, all_params).fetchall()
 
-    liked_set = set()
-    if visitor_id:
-        entry_ids = [e['id'] for e in entries]
-        if entry_ids:
-            ph = ','.join('?'*len(entry_ids))
-            liked_rows = conn.execute(
-                f"SELECT entry_id FROM likes WHERE visitor_id = ? AND entry_id IN ({ph})",
-                [visitor_id] + entry_ids).fetchall()
-            liked_set = {row['entry_id'] for row in liked_rows}
+    # Ambil total dari baris pertama (jika ada)
+    total = entries[0]['total'] if entries else 0
 
-    conn.close()
-
+    # Bentuk respons JSON
     result = []
     for e in entries:
         result.append({
@@ -303,16 +356,22 @@ def api_entries():
             'source': e['source'] or 'Anonim',
             'tags': parse_tags(e['tags']),
             'like_count': e['like_count'],
-            'user_liked': e['id'] in liked_set,
-            'username': e['username'] if e['username'] else 'Anonim',
+            'user_liked': bool(e['user_liked']),
+            'username': e['username'] or 'Anonim',
             'created_at': e['created_at']
         })
-    return jsonify({'entries': result, 'page': page, 'per_page': per_page, 'total': total})
+    return jsonify({
+        'entries': result,
+        'page': page,
+        'per_page': per_page,
+        'total': total
+    })
 
 @app.route('/api/entries/<int:entry_id>/like', methods=['POST'])
 @csrf.exempt
 @limiter.limit("30 per minute;100 per hour")
 def like_entry(entry_id):
+    """Menambah like dari pengunjung (visitor_id)."""
     data = request.get_json(silent=True) or {}
     visitor_id = data.get('visitor_id', '').strip()
     if not visitor_id or len(visitor_id) < 8:
@@ -326,9 +385,11 @@ def like_entry(entry_id):
         if entry['status'] != 'passed':
             return jsonify({'error': 'Entri belum disetujui'}), 403
 
+        # Cek duplikasi like
         existing = conn.execute(
             "SELECT id FROM likes WHERE entry_id = ? AND visitor_id = ?",
-            (entry_id, visitor_id)).fetchone()
+            (entry_id, visitor_id)
+        ).fetchone()
         if existing:
             return jsonify({'error': 'Anda sudah menyukai entri ini'}), 409
 
@@ -342,24 +403,26 @@ def like_entry(entry_id):
     except Exception as e:
         app.logger.error(f"Like error: {e}")
         return jsonify({'error': 'Kesalahan server'}), 500
-    finally:
-        conn.close()
 
 @app.route('/api/entries/<int:entry_id>/like', methods=['DELETE'])
 @csrf.exempt
 @limiter.limit("30 per minute")
 def unlike_entry(entry_id):
+    """Menghapus like pengunjung."""
     data = request.get_json(silent=True) or {}
     visitor_id = data.get('visitor_id', '').strip()
     if not visitor_id or len(visitor_id) < 8:
         return jsonify({'error': 'visitor_id tidak valid'}), 400
+
     conn = get_db()
     try:
         existing = conn.execute(
             "SELECT id FROM likes WHERE entry_id = ? AND visitor_id = ?",
-            (entry_id, visitor_id)).fetchone()
+            (entry_id, visitor_id)
+        ).fetchone()
         if not existing:
             return jsonify({'error': 'Anda belum menyukai entri ini'}), 404
+
         conn.execute("DELETE FROM likes WHERE id = ?", (existing['id'],))
         conn.execute("UPDATE entries SET like_count = like_count - 1 WHERE id = ? AND like_count > 0", (entry_id,))
         conn.commit()
@@ -368,18 +431,34 @@ def unlike_entry(entry_id):
     except Exception as e:
         app.logger.error(f"Unlike error: {e}")
         return jsonify({'error': 'Kesalahan server'}), 500
-    finally:
-        conn.close()
 
 @app.route('/api/stats')
 def api_stats():
+    """Statistik ringan untuk halaman utama."""
     conn = get_db()
-    types = conn.execute("SELECT t.id, t.name, COUNT(e.id) as cnt FROM types t LEFT JOIN entries e ON t.id = e.type_id AND e.status='passed' GROUP BY t.id ORDER BY t.name").fetchall()
-    sources = conn.execute("SELECT source, COUNT(*) as cnt FROM entries WHERE source != 'Anonim' AND source != '' AND status='passed' GROUP BY source ORDER BY source").fetchall()
-    tag_rows = conn.execute("SELECT tags FROM entries WHERE tags != '' AND status='passed'").fetchall()
-    top_liked = conn.execute("SELECT id, content, like_count FROM entries WHERE status='passed' ORDER BY like_count DESC LIMIT 5").fetchall()
-    conn.close()
+    types = conn.execute("""
+        SELECT t.id, t.name, COUNT(e.id) AS cnt
+        FROM types t
+        LEFT JOIN entries e ON t.id = e.type_id AND e.status='passed'
+        GROUP BY t.id ORDER BY t.name
+    """).fetchall()
 
+    sources = conn.execute("""
+        SELECT source, COUNT(*) AS cnt
+        FROM entries
+        WHERE source != 'Anonim' AND source != '' AND status='passed'
+        GROUP BY source ORDER BY source
+    """).fetchall()
+
+    tag_rows = conn.execute("SELECT tags FROM entries WHERE tags != '' AND status='passed'").fetchall()
+    top_liked = conn.execute("""
+        SELECT id, content, like_count
+        FROM entries
+        WHERE status='passed'
+        ORDER BY like_count DESC LIMIT 5
+    """).fetchall()
+
+    # Hitung frekuensi tag
     tag_counts = {}
     for r in tag_rows:
         for t in parse_tags(r['tags']):
@@ -395,9 +474,16 @@ def api_stats():
 
 @app.route('/api/random')
 def api_random():
+    """Ambil satu entri acak yang sudah disetujui."""
     conn = get_db()
-    entry = conn.execute("SELECT e.*, t.name as type_name, u.username FROM entries e JOIN types t ON e.type_id = t.id JOIN users u ON e.user_id = u.id WHERE e.status='passed' ORDER BY RANDOM() LIMIT 1").fetchone()
-    conn.close()
+    entry = conn.execute("""
+        SELECT e.*, t.name AS type_name, u.username
+        FROM entries e
+        JOIN types t ON e.type_id = t.id
+        JOIN users u ON e.user_id = u.id
+        WHERE e.status='passed'
+        ORDER BY RANDOM() LIMIT 1
+    """).fetchone()
     if not entry:
         return jsonify({'error': 'Tidak ada entri'}), 404
     return jsonify({
@@ -413,12 +499,13 @@ def api_random():
     })
 
 # ====================================================================
-# USER AUTHENTICATION API
+# API Autentikasi Pengguna
 # ====================================================================
 @app.route('/api/register', methods=['POST'])
 @csrf.exempt
 @limiter.limit("3 per minute")
 def register():
+    """Registrasi pengguna baru (role otomatis 'user')."""
     data = request.get_json()
     username = data.get('username', '').strip().lower()
     password = data.get('password', '')
@@ -429,7 +516,6 @@ def register():
 
     conn = get_db()
     if conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone():
-        conn.close()
         return jsonify({'error': 'Username sudah digunakan.'}), 409
 
     try:
@@ -438,24 +524,21 @@ def register():
         conn.commit()
         user_id = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()['id']
         login_user(User(user_id, username, 'user'))
-        conn.close()
         return jsonify({'success': True, 'username': username, 'role': 'user'}), 201
     except Exception as e:
         app.logger.error(f"Register error: {e}")
         return jsonify({'error': 'Gagal mendaftar.'}), 500
-    finally:
-        conn.close()
 
 @app.route('/api/login', methods=['POST'])
 @csrf.exempt
 @limiter.limit("10 per minute")
 def api_login():
+    """Login via API (mengembalikan JSON)."""
     data = request.get_json()
     username = data.get('username', '').strip().lower()
     password = data.get('password', '')
     conn = get_db()
     user_row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
-    conn.close()
     if user_row and check_password_hash(user_row['password_hash'], password):
         role = user_row['role'] if 'role' in user_row.keys() else 'user'
         login_user(User(user_row['id'], user_row['username'], role))
@@ -471,6 +554,7 @@ def api_logout():
 @app.route('/api/me')
 @login_required
 def api_me():
+    """Info pengguna yang sedang login."""
     return jsonify({
         'id': current_user.id,
         'username': current_user.username,
@@ -478,12 +562,12 @@ def api_me():
     })
 
 # ====================================================================
-# USER ENTRIES (CRUD by user)
+# CRUD Entri oleh Pengguna Biasa
 # ====================================================================
 @app.route('/api/entries', methods=['POST'])
 @login_required
-# @csrf.exempt  <-- CSRF protection diaktifkan kembali, token harus disertakan dari frontend
 def api_create_entry():
+    """Tambah entri baru (oleh user/admin). Admin langsung 'passed', user 'pending'."""
     if current_user.role not in ('user', 'admin'):
         return jsonify({'error': 'Tidak diizinkan.'}), 403
     data = request.get_json()
@@ -491,6 +575,7 @@ def api_create_entry():
     content = data.get('content', '').strip()
     source = data.get('source', '').strip() or 'Anonim'
     tags_raw = data.get('tags', '')
+
     if not type_id or not content:
         return jsonify({'error': 'Tipe dan konten wajib diisi.'}), 400
     if not allowed_length(content, 5000):
@@ -498,52 +583,66 @@ def api_create_entry():
 
     tags = ','.join(parse_tags(tags_raw))
     status = 'passed' if current_user.role == 'admin' else 'pending'
+
     conn = get_db()
     try:
-        conn.execute("INSERT INTO entries (type_id, content, source, tags, user_id, status) VALUES (?, ?, ?, ?, ?, ?)",
-                     (int(type_id), content, source, tags, current_user.id, status))
+        conn.execute(
+            "INSERT INTO entries (type_id, content, source, tags, user_id, status) VALUES (?, ?, ?, ?, ?, ?)",
+            (int(type_id), content, source, tags, current_user.id, status)
+        )
         conn.commit()
         return jsonify({'success': True}), 201
     except Exception as e:
         app.logger.error(f"Create entry error: {e}")
         return jsonify({'error': 'Gagal menyimpan.'}), 500
-    finally:
-        conn.close()
 
 @app.route('/api/my-entries')
 @login_required
 def api_my_entries():
-    page = request.args.get('page', 1, type=int)
+    """Lihat entri milik pengguna yang sedang login."""
+    page = max(1, request.args.get('page', 1, type=int))
     per_page = 10
     offset = (page - 1) * per_page
+
     conn = get_db()
     entries = conn.execute(
-        "SELECT e.*, t.name as type_name FROM entries e JOIN types t ON e.type_id = t.id WHERE e.user_id = ? ORDER BY e.created_at DESC LIMIT ? OFFSET ?",
-        (current_user.id, per_page, offset)).fetchall()
-    total = conn.execute("SELECT COUNT(*) as cnt FROM entries WHERE user_id = ?", (current_user.id,)).fetchone()['cnt']
-    conn.close()
-    result = []
-    for e in entries:
-        result.append({
-            'id': e['id'],
-            'type_name': e['type_name'],
-            'content': e['content'],
-            'source': e['source'],
-            'tags': e['tags'],
-            'status': e['status'],
-            'like_count': e['like_count'],
-            'created_at': e['created_at']
-        })
-    return jsonify({'entries': result, 'total': total, 'page': page, 'per_page': per_page})
+        """SELECT e.*, t.name AS type_name, COUNT(*) OVER() AS total
+           FROM entries e
+           JOIN types t ON e.type_id = t.id
+           WHERE e.user_id = ?
+           ORDER BY e.created_at DESC
+           LIMIT ? OFFSET ?""",
+        (current_user.id, per_page, offset)
+    ).fetchall()
+    total = entries[0]['total'] if entries else 0
+
+    result = [{
+        'id': e['id'],
+        'type_name': e['type_name'],
+        'content': e['content'],
+        'source': e['source'],
+        'tags': e['tags'],
+        'status': e['status'],
+        'like_count': e['like_count'],
+        'created_at': e['created_at']
+    } for e in entries]
+
+    return jsonify({
+        'entries': result,
+        'total': total,
+        'page': page,
+        'per_page': per_page
+    })
 
 # ====================================================================
-# ADMIN BLUEPRINT & API
+# BLUEPRINT ADMIN (halaman HTML + API)
 # ====================================================================
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin', template_folder='templates/admin')
 
 @admin_bp.route('/login', methods=['GET', 'POST'])
 @limiter.limit("5 per minute")
 def login():
+    """Halaman login admin (form-based)."""
     if current_user.is_authenticated:
         return redirect(url_for('admin.admin_index'))
     if request.method == 'POST':
@@ -552,9 +651,9 @@ def login():
         if not username or not password:
             flash('Username dan password harus diisi.', 'error')
             return render_template('admin/login.html')
+
         conn = get_db()
         user_row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
-        conn.close()
         if user_row and check_password_hash(user_row['password_hash'], password):
             role = user_row['role'] if 'role' in user_row.keys() else 'admin'
             if role != 'admin':
@@ -579,64 +678,76 @@ def logout():
 @admin_bp.route('/')
 @login_required
 def admin_index():
+    """Halaman utama admin (hanya admin)."""
     if current_user.role != 'admin':
         abort(403)
     return render_template('admin/admin.html')
 
-# --- Admin API endpoints ---
+# --- API Admin (terletak di app root /api/admin/...) ---
+# (Biarkan tetap di sini agar URL tidak berubah; secara logis bagian dari admin)
+
 @app.route('/api/admin/entries', methods=['GET'])
 @login_required
 def api_admin_entries():
+    """Admin: daftar entri dengan filter status, pencarian, type."""
     if current_user.role != 'admin':
         return jsonify({'error': 'Forbidden'}), 403
+
     status = request.args.get('status', '').strip()
     search = request.args.get('search', '').strip()
-    type_id = request.args.get('type', '').strip()  # <-- PERBAIKAN: menangkap filter type
+    type_id = request.args.get('type', '').strip()
     page = max(1, request.args.get('page', 1, type=int))
     per_page = 20
-    offset = (page-1)*per_page
+    offset = (page - 1) * per_page
 
-    conn = get_db()
-    base = ("SELECT e.*, t.name as type_name, u.username "
-            "FROM entries e "
-            "JOIN types t ON e.type_id = t.id "
-            "JOIN users u ON e.user_id = u.id")
-    conds = []
+    where_parts = []
     params = []
-    if status and status in ('pending','reviewed','passed','rejected'):
-        conds.append("e.status = ?")
+    if status and status in ('pending', 'reviewed', 'passed', 'rejected'):
+        where_parts.append("e.status = ?")
         params.append(status)
     if search:
-        conds.append("(e.content LIKE ? OR e.source LIKE ? OR e.tags LIKE ? OR t.name LIKE ? OR u.username LIKE ?)")
-        params.extend([f"%{search}%"]*5)
+        where_parts.append("(e.content LIKE ? OR e.source LIKE ? OR e.tags LIKE ? OR t.name LIKE ? OR u.username LIKE ?)")
+        params.extend([f"%{search}%"] * 5)
     if type_id and type_id.isdigit():
-        conds.append("e.type_id = ?")
+        where_parts.append("e.type_id = ?")
         params.append(int(type_id))
-    where = ("WHERE " + " AND ".join(conds)) if conds else ""
-    total = conn.execute(f"SELECT COUNT(*) as cnt FROM entries e JOIN types t ON e.type_id = t.id JOIN users u ON e.user_id = u.id {where}", params).fetchone()['cnt']
-    entries = conn.execute(f"{base} {where} ORDER BY e.created_at DESC LIMIT ? OFFSET ?", params + [per_page, offset]).fetchall()
-    conn.close()
 
-    result = []
-    for e in entries:
-        result.append({
-            'id': e['id'],
-            'type_id': e['type_id'],
-            'type_name': e['type_name'],
-            'content': e['content'],
-            'source': e['source'] or 'Anonim',
-            'tags': e['tags'],
-            'like_count': e['like_count'],
-            'username': e['username'],
-            'status': e['status'],
-            'rejection_reason': e['rejection_reason'] or '',
-            'created_at': e['created_at']
-        })
+    where_clause = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+
+    query = f"""
+        SELECT e.*, t.name AS type_name, u.username,
+               COUNT(*) OVER() AS total
+        FROM entries e
+        JOIN types t ON e.type_id = t.id
+        JOIN users u ON e.user_id = u.id
+        {where_clause}
+        ORDER BY e.created_at DESC
+        LIMIT ? OFFSET ?
+    """
+    entries = conn.execute(query, params + [per_page, offset]).fetchall() if (conn := get_db()) else []
+    # conn sudah didapat dari get_db()
+    total = entries[0]['total'] if entries else 0
+
+    result = [{
+        'id': e['id'],
+        'type_id': e['type_id'],
+        'type_name': e['type_name'],
+        'content': e['content'],
+        'source': e['source'] or 'Anonim',
+        'tags': e['tags'],
+        'like_count': e['like_count'],
+        'username': e['username'],
+        'status': e['status'],
+        'rejection_reason': e['rejection_reason'] or '',
+        'created_at': e['created_at']
+    } for e in entries]
+
     return jsonify({'entries': result, 'total': total, 'page': page, 'per_page': per_page})
 
 @app.route('/api/admin/entries', methods=['POST'])
 @login_required
 def api_admin_create_entry():
+    """Admin: buat entri baru langsung 'passed'."""
     if current_user.role != 'admin':
         abort(403)
     data = request.get_json()
@@ -647,24 +758,24 @@ def api_admin_create_entry():
     if not allowed_length(content, 5000):
         return jsonify({'error': 'Konten terlalu panjang'}), 400
     source = data.get('source', '').strip() or 'Anonim'
-    tags_raw = data.get('tags', '')
-    tags = ','.join(parse_tags(tags_raw))
+    tags = ','.join(parse_tags(data.get('tags', '')))
 
     conn = get_db()
-    cur = conn.execute("INSERT INTO entries (type_id, content, source, tags, like_count, user_id, status) VALUES (?,?,?,?,0,?, 'passed')",
-                       (type_id, content, source, tags, current_user.id))
+    cur = conn.execute(
+        "INSERT INTO entries (type_id, content, source, tags, like_count, user_id, status) VALUES (?,?,?,?,0,?, 'passed')",
+        (type_id, content, source, tags, current_user.id)
+    )
     conn.commit()
-    conn.close()
     return jsonify({'success': True, 'id': cur.lastrowid}), 201
 
 @app.route('/api/admin/entries/<int:id>', methods=['GET'])
 @login_required
 def api_admin_get_entry(id):
+    """Admin: lihat detail satu entri."""
     if current_user.role != 'admin':
         abort(403)
     conn = get_db()
     entry = conn.execute("SELECT * FROM entries WHERE id = ?", (id,)).fetchone()
-    conn.close()
     if not entry:
         return jsonify({'error': 'Entri tidak ditemukan'}), 404
     return jsonify({
@@ -678,6 +789,7 @@ def api_admin_get_entry(id):
 @app.route('/api/admin/entries/<int:id>', methods=['PUT'])
 @login_required
 def api_admin_update_entry(id):
+    """Admin: perbarui data entri."""
     if current_user.role != 'admin':
         abort(403)
     data = request.get_json()
@@ -691,47 +803,51 @@ def api_admin_update_entry(id):
     tags = ','.join(parse_tags(data.get('tags', '')))
 
     conn = get_db()
-    conn.execute("UPDATE entries SET type_id=?, content=?, source=?, tags=? WHERE id=?",
-                 (type_id, content, source, tags, id))
+    conn.execute(
+        "UPDATE entries SET type_id=?, content=?, source=?, tags=? WHERE id=?",
+        (type_id, content, source, tags, id)
+    )
     conn.commit()
-    conn.close()
     return jsonify({'success': True})
 
 @app.route('/api/admin/entries/<int:id>', methods=['DELETE'])
 @login_required
 def api_admin_delete_entry(id):
+    """Admin: hapus entri."""
     if current_user.role != 'admin':
         abort(403)
     conn = get_db()
     conn.execute("DELETE FROM entries WHERE id = ?", (id,))
     conn.commit()
-    conn.close()
     return jsonify({'success': True})
 
 @app.route('/api/admin/entries/<int:id>/review', methods=['PUT'])
 @csrf.exempt
 @login_required
 def review_entry(id):
+    """Admin: setujui/tolak entri, lengkapi alasan penolakan."""
     if current_user.role != 'admin':
         abort(403)
     data = request.get_json()
-    action = data.get('action')  # 'passed' or 'rejected'
+    action = data.get('action')
     reason = data.get('reason', '').strip()
     if action not in ('passed', 'rejected'):
         return jsonify({'error': 'Aksi tidak valid.'}), 400
+
     conn = get_db()
     entry = conn.execute("SELECT * FROM entries WHERE id = ?", (id,)).fetchone()
     if not entry:
-        conn.close()
         return jsonify({'error': 'Entri tidak ditemukan.'}), 404
+
     new_status = 'passed' if action == 'passed' else 'rejected'
-    conn.execute("UPDATE entries SET status = ?, reviewed_by = ?, rejection_reason = ? WHERE id = ?",
-                 (new_status, current_user.id, reason if action == 'rejected' else None, id))
+    conn.execute(
+        "UPDATE entries SET status = ?, reviewed_by = ?, rejection_reason = ? WHERE id = ?",
+        (new_status, current_user.id, reason if action == 'rejected' else None, id)
+    )
     conn.commit()
-    conn.close()
     return jsonify({'success': True})
 
-# --- Types (admin only) ---
+# --- Admin: Manajemen Tipe ---
 @app.route('/api/admin/types', methods=['GET'])
 @login_required
 def api_admin_types():
@@ -748,8 +864,13 @@ def api_admin_types():
     }
     order = order_map.get(sort, 't.name COLLATE NOCASE ASC')
     conn = get_db()
-    types = conn.execute(f"SELECT t.*, COUNT(e.id) as cnt FROM types t LEFT JOIN entries e ON t.id = e.type_id GROUP BY t.id ORDER BY {order}").fetchall()
-    conn.close()
+    types = conn.execute(f"""
+        SELECT t.*, COUNT(e.id) AS cnt
+        FROM types t
+        LEFT JOIN entries e ON t.id = e.type_id
+        GROUP BY t.id
+        ORDER BY {order}
+    """).fetchall()
     return jsonify([{'id': t['id'], 'name': t['name'], 'count': t['cnt']} for t in types])
 
 @app.route('/api/admin/types', methods=['POST'])
@@ -763,11 +884,9 @@ def api_admin_create_type():
         return jsonify({'error': 'Nama tipe diperlukan'}), 400
     conn = get_db()
     if conn.execute("SELECT id FROM types WHERE name=?", (name,)).fetchone():
-        conn.close()
         return jsonify({'error': 'Tipe sudah ada'}), 409
     conn.execute("INSERT INTO types (name) VALUES (?)", (name,))
     conn.commit()
-    conn.close()
     return jsonify({'success': True}), 201
 
 @app.route('/api/admin/types/<int:id>', methods=['PUT'])
@@ -775,14 +894,12 @@ def api_admin_create_type():
 def api_admin_update_type(id):
     if current_user.role != 'admin':
         abort(403)
-    data = request.get_json()
-    name = data.get('name', '').strip().lower()
+    name = request.get_json().get('name', '').strip().lower()
     if not name:
         return jsonify({'error': 'Nama tipe diperlukan'}), 400
     conn = get_db()
     conn.execute("UPDATE types SET name=? WHERE id=?", (name, id))
     conn.commit()
-    conn.close()
     return jsonify({'success': True})
 
 @app.route('/api/admin/types/<int:id>', methods=['DELETE'])
@@ -791,30 +908,37 @@ def api_admin_delete_type(id):
     if current_user.role != 'admin':
         abort(403)
     conn = get_db()
-    cnt = conn.execute("SELECT COUNT(*) as cnt FROM entries WHERE type_id=?", (id,)).fetchone()['cnt']
+    cnt = conn.execute("SELECT COUNT(*) AS cnt FROM entries WHERE type_id=?", (id,)).fetchone()['cnt']
     if cnt > 0:
-        conn.close()
         return jsonify({'error': f'Tipe masih memiliki {cnt} entri'}), 409
     conn.execute("DELETE FROM types WHERE id=?", (id,))
     conn.commit()
-    conn.close()
     return jsonify({'success': True})
 
-# --- Sources (admin) ---
+# --- Admin: Sumber & Tag (read-only) ---
 @app.route('/api/admin/sources')
 @login_required
 def api_admin_sources():
     if current_user.role != 'admin':
         abort(403)
     sort = request.args.get('sort', 'a-z')
-    order_map = {'a-z': 'source COLLATE NOCASE ASC', 'z-a': 'source COLLATE NOCASE DESC', 'most': 'cnt DESC', 'least': 'cnt ASC'}
+    order_map = {
+        'a-z': 'source COLLATE NOCASE ASC',
+        'z-a': 'source COLLATE NOCASE DESC',
+        'most': 'cnt DESC',
+        'least': 'cnt ASC'
+    }
     order = order_map.get(sort, 'source COLLATE NOCASE ASC')
     conn = get_db()
-    sources = conn.execute(f"SELECT source, COUNT(*) as cnt FROM entries WHERE source != 'Anonim' AND source != '' GROUP BY source ORDER BY {order}").fetchall()
-    conn.close()
+    sources = conn.execute(f"""
+        SELECT source, COUNT(*) AS cnt
+        FROM entries
+        WHERE source != 'Anonim' AND source != ''
+        GROUP BY source
+        ORDER BY {order}
+    """).fetchall()
     return jsonify([{'source': s['source'], 'count': s['cnt']} for s in sources])
 
-# --- Tags (admin) ---
 @app.route('/api/admin/tags')
 @login_required
 def api_admin_tags():
@@ -823,7 +947,6 @@ def api_admin_tags():
     sort = request.args.get('sort', 'a-z')
     conn = get_db()
     rows = conn.execute("SELECT tags FROM entries WHERE tags != ''").fetchall()
-    conn.close()
     tag_counts = {}
     for r in rows:
         for t in parse_tags(r['tags']):
@@ -839,22 +962,24 @@ def api_admin_tags():
         items.sort(key=lambda x: x[0])
     return jsonify([{'tag': t, 'count': c} for t, c in items])
 
-# --- Stats (admin) ---
 @app.route('/api/admin/stats')
 @login_required
 def api_admin_stats():
     if current_user.role != 'admin':
         abort(403)
     conn = get_db()
-    total_entries = conn.execute("SELECT COUNT(*) as cnt FROM entries").fetchone()['cnt']
-    total_types = conn.execute("SELECT COUNT(*) as cnt FROM types").fetchone()['cnt']
-    total_likes = conn.execute("SELECT SUM(like_count) as total FROM entries").fetchone()['total'] or 0
-    conn.close()
-    return jsonify({'total_entries': total_entries, 'total_types': total_types, 'total_likes': total_likes})
+    total_entries = conn.execute("SELECT COUNT(*) AS cnt FROM entries").fetchone()['cnt']
+    total_types = conn.execute("SELECT COUNT(*) AS cnt FROM types").fetchone()['cnt']
+    total_likes = conn.execute("SELECT SUM(like_count) AS total FROM entries").fetchone()['total'] or 0
+    return jsonify({
+        'total_entries': total_entries,
+        'total_types': total_types,
+        'total_likes': total_likes
+    })
 
+# Daftarkan blueprint admin
 app.register_blueprint(admin_bp)
 
 if __name__ == '__main__':
-    import os
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
