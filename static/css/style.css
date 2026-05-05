@@ -204,7 +204,7 @@ body {
 
 .candle2__fire {
   position: absolute;
-  top: 50%; left: 40%;
+  top: 50%; left: 50%;
   width: 16px; height: 20px;
   background: #FF9800;
   border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
