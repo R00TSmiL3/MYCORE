@@ -319,17 +319,17 @@ body {
   0%,28%,58%,100% { transform: translate(-25%, -50%) scale(2.5, 2.5); border: 2px solid rgba(255, 255, 255, 0.2); }
 }
 @keyframes dance-fire {
-  59%,89% { left: 40%; width: 0px; height: 0px; }
-  90%,0%,7%,15%,23%,31%,39%,47%,55% { left: 40.8%; width: 16px; height: 20px; background: #FFC107; }
-  94%,3%,11%,19%,27%,35%,43%,51%,58% { left: 41.2%; width: 16px; height: 20px; background: #FF9800; }
+  59%,89% { left: 50%; width: 0px; height: 0px; }
+  90%,0%,7%,15%,23%,31%,39%,47%,55% { left: 50.8%; width: 16px; height: 20px; background: #FFC107; }
+  94%,3%,11%,19%,27%,35%,43%,51%,58% { left: 50.2%; width: 16px; height: 20px; background: #FF9800; }
 }
 @keyframes changeto-lower {
   0%,70%,90% { padding: 0px; display: inline-block; border-radius: 100%; background: #673C63; border-width: 0 0 0 0; border: 0px solid #673C63; transform: translate(-90%, 0%); }
-  71%,89% { background: none; border: solid #673C63; border-radius: 0px; border-width: 0 2px 2px 0; display: inline-block; padding: 1px; float: left; transform-origin: bottom left; transform: rotate(-45deg) translate(-50%, -65%); -webkit-transform: rotate(-45deg) translate(-50%, -65%); }
+  71%,89% { background: none; border: solid #673C63; border-radius: 0px; border-width: 0 2px 2px 0; display: inline-block; padding: 1px; float: left; transform-origin: bottom left; transform: rotate(-45deg); }
 }
 @keyframes changeto-greater {
   0%,70%,90% { top: 50%; padding: 0px; display: inline-block; border-radius: 100%; background: #673C63; border-width: 0 0 0 0; border: 0px solid #673C63; transform: translate(-80%, 0%); }
-  71%,89% { top: 30%; background: none; border: solid #673C63; border-radius: 0px; border-width: 0 2px 2px 0; display: inline-block; padding: 1px; float: left; transform-origin: bottom left; transform: rotate(135deg) translate(-80%, 20%); -webkit-transform: rotate(135deg) translate(-80%, 20%); }
+  71%,89% { top: 30%; background: none; border: solid #673C63; border-radius: 0px; border-width: 0 2px 2px 0; display: inline-block; padding: 1px; float: left; transform-origin: bottom left; transform: rotate(45deg); }
 }
 
 /* ==================== Sticky Header ==================== */
