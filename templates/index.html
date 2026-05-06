@@ -6,97 +6,542 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>🕯️ Arsip Rasa</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        /* ========== Penyempurnaan layout global ========== */
+        .sticky-header {
+            padding: 0.6rem 2rem;
+            position: relative; /* untuk tooltip lilin */
+        }
+
+        /* === Desktop: layout 4 kolom (default) === */
+        .header-inner {
+            display: grid;
+            grid-template-columns: 60px auto 1fr auto;
+            align-items: center;
+            gap: 1.2rem;
+        }
+
+        .candle-wrapper {
+            flex-shrink: 0;
+            margin-right: 0;
+            /* Turunkan sedikit agar animasi terlihat */
+            transform: translateY(4px);
+        }
+
+        .logo-text h1 {
+            font-size: 1.5rem;
+            margin: 0;
+            color: var(--gold);
+            letter-spacing: 0.5px;
+            text-shadow: 0 0 12px rgba(212, 175, 55, 0.4);
+            white-space: nowrap;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-style: italic;
+            font-size: 0.8rem;
+            margin: 0;
+        }
+
+        .search-sort-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            width: 100%;
+            max-width: 520px;
+            justify-self: center;
+        }
+
+        .search-wrapper {
+            position: relative;
+            flex: 1;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+            color: var(--text-muted);
+        }
+
+        #searchInput {
+            width: 100%;
+            padding: 0.55rem 1rem 0.55rem 2.5rem;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 28px;
+            color: var(--text);
+            font-family: inherit;
+            font-size: 0.95rem;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        #searchInput:focus {
+            border-color: var(--gold);
+            box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1);
+            outline: none;
+        }
+
+        select.sort-select {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            cursor: pointer;
+            outline: none;
+            white-space: nowrap;
+        }
+
+        select.sort-select:focus {
+            border-color: var(--gold);
+        }
+
+        .action-icons {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            justify-self: end;
+        }
+
+        .action-icons button {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .action-icons button:hover {
+            background: var(--surface2);
+            color: var(--gold);
+        }
+
+        .action-icons button.active {
+            color: var(--gold);
+            background: rgba(212, 175, 55, 0.12);
+        }
+
+        .badge {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            background: var(--danger);
+            color: white;
+            border-radius: 10px;
+            padding: 0.1rem 0.4rem;
+            font-size: 0.65rem;
+            font-weight: bold;
+            min-width: 18px;
+            text-align: center;
+        }
+
+        /* Tooltip lilin */
+        .candle-tooltip {
+            position: absolute;
+            left: 75px;  /* di samping kanan lilin */
+            top: 15px;
+            background: var(--surface);
+            border: 1px solid var(--gold);
+            color: var(--text);
+            padding: 0.4rem 0.8rem;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            white-space: nowrap;
+            z-index: 110;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .candle-tooltip::before {
+            content: '';
+            position: absolute;
+            left: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+            border: 8px solid transparent;
+            border-right-color: var(--gold);
+        }
+        .candle-tooltip.visible {
+            opacity: 1;
+        }
+
+        /* Toast pilihan sembunyikan tombol masuk */
+        .hide-login-toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--gold);
+            border-radius: 10px;
+            padding: 0.8rem 1rem;
+            color: var(--text);
+            z-index: 1001;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            display: none;
+            flex-direction: column;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            max-width: 280px;
+        }
+        .hide-login-toast.visible {
+            display: flex;
+        }
+        .hide-login-toast .duration-buttons {
+            display: flex;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+        }
+        .hide-login-toast button {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 0.3rem 0.6rem;
+            border-radius: 14px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            transition: all 0.2s;
+        }
+        .hide-login-toast button:hover {
+            border-color: var(--gold);
+            color: var(--gold);
+        }
+        .hide-login-toast .close-toast {
+            align-self: flex-end;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .filter-panel {
+            position: absolute;
+            top: 100%;
+            right: 2rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            padding: 1rem;
+            display: none;
+            flex-direction: column;
+            gap: 0.6rem;
+            z-index: 100;
+            width: 260px;
+            backdrop-filter: blur(10px);
+        }
+
+        .filter-panel.visible {
+            display: flex;
+        }
+
+        .filter-group label {
+            text-transform: uppercase;
+            font-size: 0.7rem;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 0.15rem;
+        }
+
+        .filter-group input,
+        .filter-group select {
+            width: 100%;
+            padding: 0.4rem 0.6rem;
+            border-radius: 8px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 0.9rem;
+        }
+
+        .active-filters {
+            margin: 0.4rem auto 0;
+            max-width: 1200px;
+            display: flex;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+        }
+
+        .chip {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 0.2rem 0.8rem;
+            font-size: 0.75rem;
+            color: var(--gold);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .chip button {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 1rem;
+            line-height: 1;
+        }
+
+        .chip button:hover {
+            color: var(--danger);
+        }
+
+        .stats-bar {
+            margin: 0.8rem 0 1.2rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            justify-content: center;
+        }
+
+        .stat-badge {
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 0.2rem 0.8rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-muted);
+        }
+
+        .stat-badge:hover {
+            border-color: var(--gold);
+            color: var(--gold);
+        }
+
+        .stat-badge strong {
+            color: var(--gold);
+        }
+
+        /* ====== Mobile ====== */
+        @media (max-width: 768px) {
+            .sticky-header {
+                padding: 0.5rem 1rem;
+            }
+
+            .header-inner {
+                grid-template-columns: auto 1fr auto;
+                grid-template-rows: auto auto;
+                grid-template-areas:
+                    "candle logo actions"
+                    "search search search";
+                gap: 0.5rem;
+                align-items: center;
+            }
+
+            .candle-wrapper {
+                grid-area: candle;
+                width: 48px;
+                height: 64px;
+                justify-self: start;
+            }
+
+            .logo-text {
+                grid-area: logo;
+                justify-self: start;
+            }
+
+            .logo-text h1 {
+                font-size: 1.2rem;
+            }
+
+            .subtitle {
+                font-size: 0.7rem;
+            }
+
+            .action-icons {
+                grid-area: actions;
+                justify-self: end;
+                gap: 0.2rem;
+            }
+
+            .action-icons button {
+                width: 34px;
+                height: 34px;
+            }
+
+            .search-sort-group {
+                grid-area: search;
+                max-width: 100%;
+                flex-wrap: nowrap;
+            }
+
+            #searchInput {
+                flex: 1;
+                font-size: 0.9rem;
+                padding: 0.5rem 1rem 0.5rem 2.2rem;
+            }
+
+            select.sort-select {
+                font-size: 0.8rem;
+                padding: 0.4rem 0.8rem;
+            }
+
+            .filter-panel {
+                right: 1rem;
+                left: 1rem;
+                width: auto;
+            }
+
+            .candle-tooltip {
+                left: 60px;
+                top: 10px;
+            }
+        }
+
+        @media (max-width: 400px) {
+            .logo-text h1 {
+                font-size: 1.1rem;
+            }
+            .subtitle {
+                display: none;
+            }
+        }
+    </style>
 </head>
 <body class="light-mode">
-    <header class="sticky-header">
-        <div class="header-inner">
-            <!-- Lilin Toggle Dark/Light -->
-            <label class="candle-wrapper" id="candleWrapper">
-                <input type="checkbox" id="themeToggle" checked>
-                <div class="wrapper" id="lilinWrapper">
-                    <div class="candles">
-                        <div class="light__wave"></div>
-                        <div class="candle1">
-                            <div class="candle1__body">
-                                <div class="candle1__eyes">
-                                    <span class="candle1__eyes-one"></span>
-                                    <span class="candle1__eyes-two"></span>
-                                </div>
-                                <div class="candle1__mouth"></div>
+
+<header class="sticky-header">
+    <!-- Tooltip penunjuk lilin -->
+    <div id="candleTooltip" class="candle-tooltip">🕯️ Klik untuk gelap/terang</div>
+
+    <div class="header-inner">
+        <!-- 🕯️ Lilin toggle (TIDAK BERUBAH) -->
+        <label class="candle-wrapper" id="candleWrapper" title="Gelap/Terang">
+            <input type="checkbox" id="themeToggle" checked>
+            <div class="wrapper" id="lilinWrapper">
+                <div class="candles">
+                    <div class="light__wave"></div>
+                    <div class="candle1">
+                        <div class="candle1__body">
+                            <div class="candle1__eyes">
+                                <span class="candle1__eyes-one"></span>
+                                <span class="candle1__eyes-two"></span>
                             </div>
-                            <div class="candle1__stick"></div>
+                            <div class="candle1__mouth"></div>
                         </div>
-                        <div class="candle2">
-                            <div class="candle2__body">
-                                <div class="candle2__eyes">
-                                    <div class="candle2__eyes-one"></div>
-                                    <div class="candle2__eyes-two"></div>
-                                </div>
-                            </div>
-                            <div class="candle2__stick"></div>
-                        </div>
-                        <div class="candle2__fire"></div>
-                        <div class="candle__smoke-one"></div>
-                        <div class="candle__smoke-two"></div>
+                        <div class="candle1__stick"></div>
                     </div>
-                    <div class="floor"></div>
+                    <div class="candle2">
+                        <div class="candle2__body">
+                            <div class="candle2__eyes">
+                                <div class="candle2__eyes-one"></div>
+                                <div class="candle2__eyes-two"></div>
+                            </div>
+                        </div>
+                        <div class="candle2__stick"></div>
+                    </div>
+                    <div class="candle2__fire"></div>
+                    <div class="candle__smoke-one"></div>
+                    <div class="candle__smoke-two"></div>
                 </div>
-            </label>
-
-            <div class="logo-area">
-                <h1>🕯️ Arsip Rasa</h1>
-                <p class="subtitle">Koleksi puisi, petikan, dan renungan</p>
+                <div class="floor"></div>
             </div>
+        </label>
 
-            <div class="search-area">
-                <div class="search-wrapper">
-                    <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                    <input type="text" id="searchInput" placeholder="Cari kata, sumber, tag..." autocomplete="off" aria-label="Cari konten">
-                </div>
-                <select id="sortSelect" class="sort-select" aria-label="Urutkan"></select>
-                <button id="filterToggle" class="btn-filter" aria-expanded="false">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-                    Filter
-                </button>
-                <button id="randomBtn" class="btn-random" title="Kutipan acak">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="18" height="18" rx="3" ry="3"/>
-                        <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/>
-                        <circle cx="15.5" cy="15.5" r="1.5" fill="currentColor"/>
-                    </svg>
-                    Acak
-                </button>
-                <button id="bookmarkBtn" class="btn-bookmarks" title="Bookmark">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-                    </svg>
-                    <span id="bookmarkBadge" class="badge" style="display:none;">0</span>
-                </button>
+        <!-- Logo -->
+        <div class="logo-text">
+            <h1>🕯️ Arsip Rasa</h1>
+            <p class="subtitle">Koleksi puisi, petikan & renungan</p>
+        </div>
+
+        <!-- Search + Sort -->
+        <div class="search-sort-group">
+            <div class="search-wrapper">
+                <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input type="text" id="searchInput" placeholder="Cari kata, sumber, tag..." autocomplete="off" aria-label="Cari konten">
             </div>
+            <select id="sortSelect" class="sort-select" aria-label="Urutkan"></select>
         </div>
-        <div id="filterPanel" class="filter-panel" aria-hidden="true">
-            <div class="filter-group"><label for="typeSelect">Tipe</label><select id="typeSelect"><option value="">Semua Tipe</option></select></div>
-            <div class="filter-group"><label for="sourceInput">Sumber</label><input type="text" id="sourceInput" placeholder="Nama penulis/sumber..."></div>
-            <div class="filter-group"><label for="tagInput">Tag</label><input type="text" id="tagInput" placeholder="Misal: rindu, trauma..."></div>
-        </div>
-        <div id="activeFilters" class="active-filters"></div>
-    </header>
 
-    <main class="container">
-        <div id="statsContainer" class="stats-bar"></div>
-        <div id="cardGrid" class="grid"></div>
-        <div id="emptyState" class="empty-state" style="display:none;">
-            <div class="empty-icon">📭</div>
-            <h3>Tidak ada hasil</h3>
-            <p>Coba kata kunci lain atau hapus filter.</p>
-            <button id="clearFiltersBtn" class="btn-random">Hapus Semua Filter</button>
+        <!-- Tombol Aksi -->
+        <div class="action-icons">
+            <button id="filterToggle" title="Filter lanjutan">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            </button>
+            <button id="randomBtn" title="Kutipan acak">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="3" ry="3"/>
+                    <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/>
+                    <circle cx="15.5" cy="15.5" r="1.5" fill="currentColor"/>
+                </svg>
+            </button>
+            <button id="bookmarkBtn" title="Markah (Bookmark)">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                </svg>
+                <span id="bookmarkBadge" class="badge" style="display:none;">0</span>
+            </button>
         </div>
-        <div id="loader" class="loader" style="display:none;">
-            <div class="loader-spinner"></div>
-            <span>Memuat...</span>
-        </div>
-    </main>
+    </div>
 
-    <script src="/static/js/script.js"></script>
+    <!-- Filter panel dropdown -->
+    <div id="filterPanel" class="filter-panel" aria-hidden="true">
+        <div class="filter-group">
+            <label for="typeSelect">Tipe</label>
+            <select id="typeSelect"><option value="">Semua Tipe</option></select>
+        </div>
+        <div class="filter-group">
+            <label for="sourceInput">Sumber</label>
+            <input type="text" id="sourceInput" placeholder="Nama penulis...">
+        </div>
+        <div class="filter-group">
+            <label for="tagInput">Tag</label>
+            <input type="text" id="tagInput" placeholder="Misal: rindu, trauma...">
+        </div>
+    </div>
+
+    <!-- Chip filter aktif -->
+    <div id="activeFilters" class="active-filters"></div>
+</header>
+
+<!-- Toast untuk menyembunyikan tombol masuk -->
+<div id="hideLoginToast" class="hide-login-toast">
+    <button class="close-toast" id="closeHideLoginToast">&times;</button>
+    <span>Sembunyikan tombol <strong>Masuk</strong> untuk sementara?</span>
+    <div class="duration-buttons">
+        <button data-duration="60">1 menit</button>
+        <button data-duration="300">5 menit</button>
+        <button data-duration="1800">30 menit</button>
+        <button data-duration="3600">1 jam</button>
+    </div>
+</div>
+
+<main class="container">
+    <div id="statsContainer" class="stats-bar"></div>
+    <div id="cardGrid" class="grid"></div>
+    <div id="emptyState" class="empty-state" style="display:none;">
+        <div class="empty-icon">📭</div>
+        <h3>Tidak ada hasil</h3>
+        <p>Coba kata kunci lain atau hapus filter.</p>
+        <button id="clearFiltersBtn" class="btn-random">Hapus Semua Filter</button>
+    </div>
+    <div id="loader" class="loader" style="display:none;">
+        <div class="loader-spinner"></div>
+        <span>Memuat...</span>
+    </div>
+</main>
+
+<script src="/static/js/script.js"></script>
 </body>
 </html>
