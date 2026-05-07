@@ -10,7 +10,7 @@
         /* ========== Penyempurnaan layout global ========== */
         .sticky-header {
             padding: 0.6rem 2rem;
-            position: relative; /* untuk tooltip lilin */
+            position: relative;
         }
 
         /* === Desktop: layout 4 kolom (default) === */
@@ -24,7 +24,6 @@
         .candle-wrapper {
             flex-shrink: 0;
             margin-right: 0;
-            /* Turunkan sedikit agar animasi terlihat */
             transform: translateY(4px);
         }
 
@@ -42,6 +41,41 @@
             font-style: italic;
             font-size: 0.8rem;
             margin: 0;
+        }
+
+        /* ====== Auth Area (ditaruh di action-icons, bukan di grid baru) ====== */
+        .auth-area {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .auth-area a,
+        .auth-area button {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 0.4rem 0.9rem;
+            border-radius: 20px;
+            font-family: inherit;
+            font-size: 0.85rem;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .auth-area a:hover,
+        .auth-area button:hover {
+            border-color: var(--gold);
+            color: var(--gold);
+        }
+
+        .auth-area #display-username {
+            color: var(--gold);
+            border: none;
+            background: transparent;
+            font-weight: bold;
         }
 
         .search-sort-group {
@@ -85,23 +119,7 @@
             outline: none;
         }
 
-        select.sort-select {
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--text);
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
-            font-family: inherit;
-            font-size: 0.9rem;
-            cursor: pointer;
-            outline: none;
-            white-space: nowrap;
-        }
-
-        select.sort-select:focus {
-            border-color: var(--gold);
-        }
-
+        /* === Tombol Aksi Kanan (tanpa sort) === */
         .action-icons {
             display: flex;
             align-items: center;
@@ -109,7 +127,7 @@
             justify-self: end;
         }
 
-        .action-icons button {
+        .action-icons > button {
             background: transparent;
             border: none;
             color: var(--text-muted);
@@ -124,12 +142,12 @@
             position: relative;
         }
 
-        .action-icons button:hover {
+        .action-icons > button:hover {
             background: var(--surface2);
             color: var(--gold);
         }
 
-        .action-icons button.active {
+        .action-icons > button.active {
             color: var(--gold);
             background: rgba(212, 175, 55, 0.12);
         }
@@ -151,7 +169,7 @@
         /* Tooltip lilin */
         .candle-tooltip {
             position: absolute;
-            left: 75px;  /* di samping kanan lilin */
+            left: 75px;
             top: 15px;
             background: var(--surface);
             border: 1px solid var(--gold);
@@ -231,6 +249,7 @@
             line-height: 1;
         }
 
+        /* ====== Filter Panel (sekarang berisi Sort juga) ====== */
         .filter-panel {
             position: absolute;
             top: 100%;
@@ -244,7 +263,7 @@
             flex-direction: column;
             gap: 0.6rem;
             z-index: 100;
-            width: 260px;
+            width: 280px;
             backdrop-filter: blur(10px);
         }
 
@@ -375,7 +394,7 @@
                 gap: 0.2rem;
             }
 
-            .action-icons button {
+            .action-icons > button {
                 width: 34px;
                 height: 34px;
             }
@@ -390,11 +409,6 @@
                 flex: 1;
                 font-size: 0.9rem;
                 padding: 0.5rem 1rem 0.5rem 2.2rem;
-            }
-
-            select.sort-select {
-                font-size: 0.8rem;
-                padding: 0.4rem 0.8rem;
             }
 
             .filter-panel {
@@ -465,18 +479,25 @@
             <p class="subtitle">Koleksi puisi, petikan & renungan</p>
         </div>
 
-        <!-- Search + Sort -->
+        <!-- Search (tanpa sort) -->
         <div class="search-sort-group">
             <div class="search-wrapper">
                 <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                 <input type="text" id="searchInput" placeholder="Cari kata, sumber, tag..." autocomplete="off" aria-label="Cari konten">
             </div>
-            <select id="sortSelect" class="sort-select" aria-label="Urutkan"></select>
         </div>
 
-        <!-- Tombol Aksi -->
+        <!-- Tombol Aksi + Auth Area -->
         <div class="action-icons">
-            <button id="filterToggle" title="Filter lanjutan">
+            <!-- Auth Area (di-render oleh script) -->
+            <div id="authArea" class="auth-area">
+                <a href="/logreg" id="loginLink">Masuk</a>
+                <span id="display-username" style="display:none;"></span>
+                <button id="btn-upload" style="display:none;">+ Upload</button>
+                <a href="#" id="logoutLink" style="display:none;">Keluar</a>
+            </div>
+
+            <button id="filterToggle" title="Filter & Urutkan">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
             </button>
             <button id="randomBtn" title="Kutipan acak">
@@ -495,8 +516,19 @@
         </div>
     </div>
 
-    <!-- Filter panel dropdown -->
+    <!-- Filter panel (sekarang berisi Sort juga) -->
     <div id="filterPanel" class="filter-panel" aria-hidden="true">
+        <div class="filter-group">
+            <label for="sortSelect">Urutkan</label>
+            <select id="sortSelect" aria-label="Urutkan">
+                <option value="newest">Terbaru</option>
+                <option value="oldest">Terlama</option>
+                <option value="a-z">A-Z</option>
+                <option value="z-a">Z-A</option>
+                <option value="most_likes">❤️ Terbanyak Like</option>
+                <option value="least_likes">🤍 Tersedikit Like</option>
+            </select>
+        </div>
         <div class="filter-group">
             <label for="typeSelect">Tipe</label>
             <select id="typeSelect"><option value="">Semua Tipe</option></select>

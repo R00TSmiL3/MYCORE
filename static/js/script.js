@@ -9,7 +9,7 @@ const HIDE_LOGIN_STORAGE_KEY = 'loginHiddenUntil';
 let currentType = '', currentSource = '', currentTag = '', currentSearch = '', currentSort = 'newest';
 let currentPage = 1, currentTotal = 0, isLoadingMore = false;
 let bookmarkMode = false;
-let isLoggedIn = false; // 🆕 state login dipantau global
+let isLoggedIn = false;
 let hideLoginToastInterval = null;
 
 // ==================== CSRF TOKEN ====================
@@ -84,7 +84,11 @@ const themeToggleInput = document.getElementById('themeToggle');
 const hideLoginToast = document.getElementById('hideLoginToast');
 const closeHideLoginToastBtn = document.getElementById('closeHideLoginToast');
 
-let loginLink, logoutLink, displayUsername, btnUpload;
+// Auth elements (ada di HTML, bukan dibuat dinamis lagi)
+const loginLink = document.getElementById('loginLink');
+const logoutLink = document.getElementById('logoutLink');
+const displayUsername = document.getElementById('display-username');
+const btnUpload = document.getElementById('btn-upload');
 
 // ==================== UTILITY FUNCTIONS ====================
 function escapeHtml(str) {
@@ -120,41 +124,6 @@ function updateBookmarkBadge() {
     }
 }
 
-// ==================== AUTH UI ====================
-function createAuthElements() {
-    if (document.getElementById('authArea')) return;
-    const authArea = document.createElement('div');
-    authArea.id = 'authArea';
-    Object.assign(authArea.style, { display: 'flex', alignItems: 'center', gap: '0.5rem' });
-
-    loginLink = document.createElement('a');
-    loginLink.href = '/logreg';
-    loginLink.className = 'btn-random';
-    loginLink.textContent = 'Masuk';
-    loginLink.id = 'loginLink';
-
-    logoutLink = document.createElement('a');
-    logoutLink.href = '#';
-    logoutLink.className = 'btn-random';
-    logoutLink.textContent = 'Keluar';
-    logoutLink.style.display = 'none';
-    logoutLink.id = 'logoutLink';
-
-    displayUsername = document.createElement('span');
-    displayUsername.id = 'display-username';
-    displayUsername.style.cssText = 'color:var(--gold); display:none';
-
-    btnUpload = document.createElement('button');
-    btnUpload.className = 'btn-random';
-    btnUpload.textContent = '+ Upload';
-    btnUpload.style.display = 'none';
-    btnUpload.id = 'btn-upload';
-
-    authArea.append(loginLink, displayUsername, btnUpload, logoutLink);
-    const container = document.querySelector('.search-area') || document.querySelector('.header-inner');
-    if (container) container.appendChild(authArea);
-}
-
 // ==================== AUTH STATE ====================
 async function checkLogin() {
     try {
@@ -170,39 +139,42 @@ async function checkLogin() {
 
 function showLoggedIn(user) {
     isLoggedIn = true;
-    if (!loginLink) return;
+    if (!loginLink || !logoutLink || !displayUsername || !btnUpload) return;
+
     loginLink.style.display = 'none';
-    if (displayUsername) {
-        displayUsername.style.display = 'inline';
-        displayUsername.textContent = user.username;
-    }
-    if (btnUpload) btnUpload.style.display = 'inline-flex';
-    if (logoutLink) {
-        logoutLink.style.display = 'inline-flex';
-        logoutLink.onclick = async (e) => {
-            e.preventDefault();
-            await fetch('/api/logout');
-            showLoggedOut();
-            showToast('Anda telah keluar.', 'info');
-        };
-    }
-    if (btnUpload) {
-        btnUpload.onclick = () => showUploadModal();
-    }
-    // Sembunyikan toast jika ada
+    displayUsername.style.display = 'inline';
+    displayUsername.textContent = user.username;
+    btnUpload.style.display = 'inline-flex';
+    logoutLink.style.display = 'inline-flex';
+
+    logoutLink.onclick = async (e) => {
+        e.preventDefault();
+        await fetch('/api/logout');
+        showLoggedOut();
+        showToast('Anda telah keluar.', 'info');
+    };
+
+    btnUpload.onclick = () => showUploadModal();
+
+    // Sembunyikan toast jika ada & reset durasi
     if (hideLoginToast) hideLoginToast.classList.remove('visible');
-    // Reset durasi
     localStorage.removeItem(HIDE_LOGIN_STORAGE_KEY);
 }
 
 function showLoggedOut() {
     isLoggedIn = false;
-    if (!loginLink) return;
-    // Tampilkan tombol masuk jika bukan dalam masa sembunyi
-    updateLoginVisibility();
-    if (displayUsername) displayUsername.style.display = 'none';
-    if (btnUpload) btnUpload.style.display = 'none';
-    if (logoutLink) logoutLink.style.display = 'none';
+    if (!loginLink || !logoutLink || !displayUsername || !btnUpload) return;
+
+    displayUsername.style.display = 'none';
+    btnUpload.style.display = 'none';
+    logoutLink.style.display = 'none';
+
+    // 🔧 PERBAIKAN: cek apakah login disembunyikan oleh timer
+    if (isLoginHidden()) {
+        loginLink.style.display = 'none';
+    } else {
+        loginLink.style.display = 'inline-flex';
+    }
 }
 
 // ==================== MODAL & UPLOAD ====================
@@ -530,7 +502,7 @@ window.addEventListener('scroll', () => {
     }
 });
 
-// ==================== FILTERS & CHIPS ====================
+// ==================== FILTERS & CHIPS (Sort ada di filter panel) ====================
 function updateFilters() {
     currentSearch = searchInput.value.trim();
     currentType = typeSelect.value;
@@ -573,6 +545,10 @@ clearFiltersBtn?.addEventListener('click', () => {
 
 function renderActiveChips() {
     let html = '';
+    if (currentSort && currentSort !== 'newest' && sortSelect) {
+        const sortText = sortSelect.options[sortSelect.selectedIndex]?.text || currentSort;
+        html += `<span class="chip">Urut: ${escapeHtml(sortText)} <button data-clear="sort">×</button></span>`;
+    }
     if (currentType && typeSelect) {
         const text = typeSelect.options[typeSelect.selectedIndex]?.text.split(' (')[0] || currentType;
         html += `<span class="chip">Tipe: ${escapeHtml(text)} <button data-clear="type">×</button></span>`;
@@ -587,6 +563,7 @@ function renderActiveChips() {
             if (clearType === 'type' && typeSelect) typeSelect.value = '';
             else if (clearType === 'source' && sourceInput) sourceInput.value = '';
             else if (clearType === 'tag' && tagInput) tagInput.value = '';
+            else if (clearType === 'sort' && sortSelect) sortSelect.value = 'newest';
             updateFilters();
         });
     });
@@ -625,19 +602,15 @@ async function loadStatsAndTypes() {
 // ==================== TOOLTIP LILIN ====================
 function setupCandleTooltip() {
     if (!candleTooltip || !themeToggleInput) return;
-    // Tampilkan sekali per session
     const hasShown = sessionStorage.getItem('candleTooltipShown');
     if (hasShown) {
         candleTooltip.classList.remove('visible');
         return;
     }
-    // Tampilkan setelah 1 detik
     setTimeout(() => {
         candleTooltip.classList.add('visible');
         sessionStorage.setItem('candleTooltipShown', 'true');
-        // Hilangkan setelah 6 detik
         setTimeout(() => candleTooltip.classList.remove('visible'), 6000);
-        // Atau jika lilin diklik, langsung hilangkan
         themeToggleInput.addEventListener('change', () => candleTooltip.classList.remove('visible'), { once: true });
     }, 1000);
 }
@@ -661,13 +634,16 @@ function isLoginHidden() {
 }
 function updateLoginVisibility() {
     if (!loginLink) return;
+    if (isLoggedIn) {
+        loginLink.style.display = 'none';
+        return;
+    }
     const shouldHide = isLoginHidden();
     loginLink.style.display = shouldHide ? 'none' : 'inline-flex';
 }
 
 function setupHideLoginToast() {
     if (!hideLoginToast) return;
-    // Tombol pilihan durasi
     hideLoginToast.querySelectorAll('.duration-buttons button').forEach(btn => {
         btn.addEventListener('click', () => {
             const seconds = parseInt(btn.dataset.duration, 10);
@@ -679,14 +655,12 @@ function setupHideLoginToast() {
             }
         });
     });
-    // Tombol close
     closeHideLoginToastBtn?.addEventListener('click', () => {
         hideLoginToast.classList.remove('visible');
     });
 
-    // Interval muncul setiap 5 detik jika belum login & tombol terlihat
     hideLoginToastInterval = setInterval(() => {
-        // Jangan muncul jika user sudah login, atau tombol login tidak terlihat
+        // Jangan muncul jika user sudah login, tombol login tidak ada, atau toast sudah terlihat
         if (isLoggedIn) return;
         if (!loginLink || loginLink.style.display === 'none') return;
         if (hideLoginToast.classList.contains('visible')) return;
@@ -695,21 +669,9 @@ function setupHideLoginToast() {
 }
 
 // ==================== INISIALISASI ====================
-function populateSortSelect() {
-    if (!sortSelect) return;
-    sortSelect.innerHTML = `
-        <option value="newest">Terbaru</option>
-        <option value="oldest">Terlama</option>
-        <option value="a-z">A-Z</option>
-        <option value="z-a">Z-A</option>
-        <option value="most_likes">❤️ Terbanyak Like</option>
-        <option value="least_likes">🤍 Tersedikit Like</option>`;
-    sortSelect.value = currentSort;
-}
-
 function init() {
-    createAuthElements();
-    populateSortSelect();
+    // Auth elements sudah ada di HTML, tidak perlu createAuthElements()
+    sortSelect.value = currentSort;
     updateBookmarkBadge();
     showSkeletons();
     loadStatsAndTypes();
