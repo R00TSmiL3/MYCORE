@@ -31,11 +31,8 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 csrf = CSRFProtect(app)
-
-limiter = Limiter(
-    key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"]
-)
+limiter = Limiter(key_func=get_remote_address,
+                  default_limits=["2000 per day", "500 per hour"])
 limiter.init_app(app)
 
 login_manager = LoginManager()
@@ -217,8 +214,18 @@ def server_error(e):
 @app.errorhandler(CSRFError)
 def handle_csrf_error(e):
     flash('Token keamanan tidak valid.', 'error')
-    return redirect(request.referrer or url_for('index'))
-
+    referrer = (request.referrer or '').replace('\\', '/')
+    if referrer:
+        parsed = urlparse(referrer)
+        safe_path = parsed.path or ''
+        if (
+            not parsed.scheme
+            and not parsed.netloc
+            and safe_path.startswith('/')
+            and not safe_path.startswith('//')
+        ):
+            return redirect(safe_path)
+    return redirect(url_for('index'))
 @app.errorhandler(403)
 def forbidden(error):
     ip = request.remote_addr
