@@ -3,6 +3,7 @@ import time
 import sqlite3
 import logging
 from functools import wraps
+from urllib.parse import urlparse
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
@@ -668,9 +669,17 @@ def login():
                 return render_template('admin/login.html')
             login_user(User(user_row['id'], user_row['username'], role))
             flash('Berhasil login.', 'success')
-            next_page = request.args.get('next')
-            if next_page and is_safe_redirect_url(next_page):
-                return redirect(next_page)
+            next_page = request.args.get('next', '').strip()
+            if next_page:
+                normalized_next = next_page.replace('\\', '')
+                parsed_next = urlparse(normalized_next)
+                if (
+                    not parsed_next.scheme
+                    and not parsed_next.netloc
+                    and normalized_next.startswith('/')
+                    and not normalized_next.startswith('//')
+                ):
+                    return redirect(normalized_next)
             return redirect(url_for('admin.admin_index'))
         flash('Username atau password salah.', 'error')
     return render_template('admin/login.html')
